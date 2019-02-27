@@ -5,6 +5,11 @@ MakerBot Agent/Adapter Core serves as a data aggregator with MakerBot 3D Printer
    - [BotManager](#botmanager)
    - [Makerbot](#makerbot)
      - [Properties](#properties)
+     - [Methods](#methods)
+   - [CommunicationConnection](#communicationconnection)
+     - [Properties](#properties-1)
+     - [Methods](#methods-1)
+   - [API](#api)
 
 ## Getting Started
 For testing purposes the project is set to *Console Application*, ensure the Output type is set to *Class Library* then build the solution.
