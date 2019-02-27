@@ -1,5 +1,8 @@
 MakerBot Agent/Adapter Core serves as a data aggregator with MakerBot 3D Printers from the 4th generation and newer. The library provides wrappers for communicating with the machine asynchronously using its JSON-RPC communication. An MTConnect Adapter will be completed and embedded using this library.
 
+## Table of Contents
+ - [Getting Started](#getting-started)
+
 ## Getting Started
 For testing purposes the project is set to *Console Application*, ensure the Output type is set to *Class Library* then build the solution.
 
