@@ -61,6 +61,54 @@ namespace MakerBotAgentAdapterCore.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to [adapter]
+        ///; Specify the Port Number to stream pipe-delimited data
+        ///port=7878
+        ///; Specify data rate (in milliseconds; min: 200ms; max: 1,800,00ms aka 30mins)
+        ///rate=1000
+        ///
+        ///[machineConnections]
+        ///; Allow the adapter to automatically begin requesting authorization from unauthorized machines. Requires physical interaction with machine
+        ///requestAuthentication=true
+        ///allowCameraAuthentication=false
+        ///
+        ///[dataItems]
+        ///; Configure which DataItems to extract. Changes require a restart to the app
+        ///.
+        /// </summary>
+        internal static string adapter {
+            get {
+                return ResourceManager.GetString("adapter", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; standalone=&quot;no&quot;?&gt;
+        ///&lt;Bots&gt;
+        ///  &lt;![CDATA[
+        ///  &lt;Bot type=&quot;{bottype}&quot;&gt;
+        ///    &lt;DataItems&gt;
+        ///      &lt;DataItem&gt;
+        ///        &lt;RequestType&gt;{Notification|Request}&lt;/RequestType&gt;
+        ///        &lt;Name&gt;{MTConnect DataItem Name}&lt;/Name&gt;
+        ///        &lt;Path&gt;{JSON Path for the JObject value in JsonRPC response}&lt;/Path&gt;
+        ///        &lt;Type&gt;{Condition|Event|Sample}&lt;/Type&gt;
+        ///      &lt;/DataItem&gt;
+        ///    &lt;/DataItems&gt;
+        ///  &lt;/Bot&gt;
+        ///  ]]&gt;
+        ///  &lt;Bot type=&quot;replicator_b&quot;&gt;
+        ///    &lt;DataItems&gt;
+        ///      &lt;DataItem&gt;
+        ///        &lt;RetrievalType&gt;Not [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string CroissantAPIMap {
+            get {
+                return ResourceManager.GetString("CroissantAPIMap", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; standalone=&quot;yes&quot;?&gt;
         ///&lt;Machines&gt;&lt;/Machines&gt;.
         /// </summary>

@@ -25,11 +25,13 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
         private Dictionary<int, JObject> responses;
         private Dictionary<int, JObject> pendingRequests;
         private List<JObject> unsolicitedResponses;
+        private Dictionary<string, JObject> notifications;
         private System.Threading.Thread _requestThread;
 
         public bool Authenticated;
         public event EventHandler RpcConnectionChanged;
         public event EventHandler RpcThreadChanged;
+        public event EventHandler RpcNotification;
 
         public bool IsConnected {
           get {
@@ -49,6 +51,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           this.responses = new Dictionary<int, JObject>();
           this.unsolicitedResponses = new List<JObject>();
           this.pendingRequests = new Dictionary<int, JObject>();
+          this.notifications = new Dictionary<string, JObject>();
           this._requestId = -1;
 
           this._cnn = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -114,6 +117,36 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           }
           return response;
         }
+        public JObject Request(RpcRequest request){
+          return this.Request(request.method, request.parameters);
+        }
+        
+        public class RpcRequest{
+          public string method { get; set; }
+          public object parameters { get; set; }
+
+          public RpcRequest(string strMethod, object objParameters = null) {
+            this.method = strMethod;
+            this.parameters = objParameters;
+          }
+
+          public override bool Equals(object obj) {
+            if (obj is RpcRequest){
+              RpcRequest iobj = obj as RpcRequest;
+              if (iobj.method == this.method) {
+                return true;
+              }else{
+                return false;
+              }
+            }else{
+              return false;
+            }
+          }
+          public override int GetHashCode() {
+            return base.GetHashCode();
+          }
+        }
+
 
         private void _reader() {
           System.Diagnostics.Debug.WriteLine("Starting RPC Reader Thread");
@@ -147,13 +180,21 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           if (obj.ContainsKey("id")) {
             this._handlingResponse = true;
             int id = int.Parse(obj["id"].ToString());
-            if (int.TryParse(obj["id"].ToString(), out id)){// id != null) {
+            if (int.TryParse(obj["id"].ToString(), out id)) {// id != null) {
               if (!this.responses.ContainsKey(id)) {
                 this.responses.Add(id, obj);
               }
-            }else{
+            } else {
               write("Couldn't parse Id of response. Throwing away message: \r\n\t" + message, ConsoleColor.Yellow);
             }
+          }else if (obj.ContainsKey("method")){
+            string methodName = obj["method"].Value<string>();
+            if (this.notifications.ContainsKey(methodName)) {
+              this.notifications[methodName] = obj;
+            }else{
+              this.notifications.Add(methodName, obj);
+            }
+            this.NotificationReceived(methodName, obj);
           } else {
             this.unsolicitedResponses.Add(obj);
           }
@@ -204,6 +245,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           }
           return null;
         }
+        
         private int _request(string method, object parameters = null) {
           //string responseOut = "";
           int requestId = this.requestId;
@@ -228,6 +270,19 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
         }
         
 
+        private void NotificationReceived(string method, JObject result) {
+          RpcNotificationEventArgs res = new RpcNotificationEventArgs(method, result);
+          this.RpcNotification?.Invoke(this, res);
+        }
+        public class RpcNotificationEventArgs:EventArgs{
+          public string method;
+          public JObject rawResponse;
+
+          public RpcNotificationEventArgs(string meth, JObject raw) {
+            this.method = meth;
+            this.rawResponse = raw;
+          }
+        }
       }
     }
   }

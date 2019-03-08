@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<MTConnectDevices xmlns="urn:mtconnect.org:MTConnectDevices:1.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:m="urn:mtconnect.org:MTConnectDevices:1.4" xsi:schemaLocation="urn:mtconnect.org:MTConnectDevices:1.4 /schemas/MTConnectDevices_1.4.xsd">
+  <Header bufferSize="10" instanceId="1" creationTime="2019-03-06T11:01:00" sender="{Environment.GetEnvironmentVariable('COMPUTERNAME') ?? Environment.GetEnvironmentVariable('HOSTNAME')}" version="1.4" assetCount="0" assetBufferSize="10" />
+  <Devices>
+    <Device name="MakerBot+" nativeName="replicator_b" uuid="D7E84996-A444-4DE6-9273-645BD882A5D0" id="replicator_b" sampleInterval="200">
+      <Description manufacturer="MakerBot Industries" model="Replicator+" serialNumber="{SerialNumber}">MakerBot 5th Generation Replicator+</Description>
+      <DataItems>
+        <DataItem id="avail" name="availability" type="AVAILABILITY" category="EVENT"></DataItem>
+        <DataItem id="serial" name="serial_number" type="SERIAL_NUMBER" category="EVENT"></DataItem>
+      </DataItems>
+      <Components>
+        <Axes id="axes" name="Axes">
+          <Components>
+            <Linear id="x" name="X">
+              <DataItems>
+                <DataItem id="xPos" name="x_actual" type="POSITION" subType="ACTUAL" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER" />
+                <DataItem id="xAccImp" name="x_acceleration_impulse_speed" type="ACCELERATION" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND"><![CDATA[get_config.result.acceleration.impulse_speed_limit_mm_per_s.x]]></DataItem>
+                <DataItem id="xFeed" name="x_feedrate" type="AXIS_FEEDRATE" subtype="PROGRAMMED" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND^2"><![CDATA[get_config.result.acceleration.rate_mm_per_s_sq.x]]></DataItem>
+              </DataItems>
+              <Compositions>
+                <Composition type="MOTOR" id="xmot" name="x_motor">
+                  <Description manufacturer="Pololu" serialNumber="NEMA17">NEMA17 Stepper Motor</Description>
+                </Composition>
+                <Composition type="BELT" id="xbelt" name="x_belt">
+                  <Description manufacturer="MakerBot Industries" serialNumber="2MR-09">2MR-09 Neoprene Belt</Description>
+                </Composition>
+              </Compositions>
+            </Linear>
+            <Linear id="y" name="Y">
+              <DataItems>
+                <DataItem id="yPos" name="Actual Y Position" type="POSITION" subType="ACTUAL" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER" />
+                <DataItem id="yAccImp" name="y_acceleration_impulse_speed" type="ACCELERATION" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND"><![CDATA[get_config.result.acceleration.impulse_speed_limit_mm_per_s.y]]></DataItem>
+                <DataItem id="yFeed" name="y_feedrate" type="AXIS_FEEDRATE" subtype="PROGRAMMED" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND^2"><![CDATA[get_config.result.acceleration.rate_mm_per_s_sq.y]]></DataItem>
+              </DataItems>
+              <Compositions>
+                <Composition type="MOTOR" id="ymot" name="y_motor">
+                  <Description manufacturer="Pololu" serialNumber="NEMA17">NEMA17 Stepper Motor</Description>
+                </Composition>
+                <Composition type="BELT" id="ybelt" name="y_belt">
+                  <Description manufacturer="MakerBot Industries" serialNumber="2MR-09">2MR-09 Neoprene Belt</Description>
+                </Composition>
+              </Compositions>
+            </Linear>
+            <Linear id="z" name="Z">
+              <DataItems>
+                <DataItem id="zPos" name="Actual Z Position" type="POSITION" subType="ACTUAL" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER" />
+                <DataItem id="zAccImp" name="z_acceleration_impulse_speed" type="ACCELERATION" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND"><![CDATA[get_config.result.acceleration.impulse_speed_limit_mm_per_s.z]]></DataItem>
+                <DataItem id="zFeed" name="z_feedrate" type="AXIS_FEEDRATE" subtype="PROGRAMMED" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND^2"><![CDATA[get_config.result.acceleration.rate_mm_per_s_sq.z]]></DataItem>
+              </DataItems>
+              <Compositions>
+                <Composition type="MOTOR" id="zmot" name="z_motor">
+                  <Description manufacturer="Pololu" serialNumber="NEMA17">NEMA17 Stepper Motor</Description>
+                </Composition>
+                <Composition type="BALLSCREW" id="zshaft" name="z_shaft">
+                  <Description manufacturer="MakerBot Industries" serialNumber="T8-2-D8 300mm">T8-2-D8 300mm Trapezoidal Lead Screw</Description>
+                </Composition>
+              </Compositions>
+            </Linear>
+          </Components>
+        </Axes>
+        <Auxiliaries id="tools" name="Toolheads">
+          <Components>
+            <Loader id="extruder" name="Extruder">
+              <Description manufacturer="MakerBot Industries" model="Smart Extruder+" serialNumber="14">MakerBot Smart Extruder+</Description>
+              <Configuration><![CDATA[Provide details found in 'get_machine_config' related to motion]]></Configuration>
+              <DataItems>
+                <DataItem id="cMode" name="filament_change_mode" type="CONTROLLER_MODE_OVERRIDE" subtype="TOOL_CHANGE_STOP" category="EVENT"><![CDATA[ON||OFF]]></DataItem>
+                <DataItem id="fEnd" name="end_of_spool_state" type="END_OF_BAR" subtype="PRIMARY" category="EVENT"><![CDATA[YES||NO]]></DataItem>
+                <DataItem id="tnum" name="toolhead_number" type="TOOL_NUMBER" category="EVENT"><![CDATA[12||13||14||etc.]]></DataItem>
+                <DataItem id="zoff" name="z_offset" type="TOOL_OFFSET" subtype="LENGTH" category="EVENT" units="MILLIMETER"><![CDATA[z_offset]]></DataItem>
+                <DataItem id="thTemp" name="extruder_temperature" type="TEMPERATURE" subType="x:ACTUAL" category="SAMPLE" compositionId="noz" units="CELSIUS"/>
+                <DataItem id="thTargetTemp" name="target_temperature" type="TEMPERATURE" subType="x:COMMANDED" category="SAMPLE" compositionId="noz" units="CELSIUS"/>
+                <DataItem id="fExec" name="fan_execution_state" type="COMPOSITION_STATE" subtype="SWITCHED" category="EVENT" compositionId="afan"><![CDATA[ON||OFF]]></DataItem>
+                <DataItem id="aPos" name="a_actual" type="POSITION" subType="ACTUAL" category="SAMPLE" coordinateSystem="MACHINE" compositionId="amot" units="MILLIMETER"/>
+                <DataItem id="aAccImp" name="a_acceleration_impulse_speed" type="ACCELERATION" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND"><![CDATA[get_config.result.acceleration.impulse_speed_limit_mm_per_s.a]]></DataItem>
+                <DataItem id="aFeed" name="a_feedrate" type="AXIS_FEEDRATE" subtype="PROGRAMMED" category="SAMPLE" coordinateSystem="MACHINE" units="MILLIMETER/SECOND^2"><![CDATA[get_config.result.acceleration.rate_mm_per_s_sq.a]]></DataItem>
+                <DataItem id="sEnd" name="end_of_spool" type="END_OF_BAR" category="CONDITION"><![CDATA[NORMAL||WARNING||FAULT]]></DataItem>
+                <DataItem id="thOper" name="toolhead_operation_status" type="SYSTEM" category="CONDITION"><![CDATA[NORMAL||WARNING||FAULT]]></DataItem>
+                <DataItem id="thSerial" name="toolhead_serial_number" type="SERIAL_NUMBER" category="EVENT" />
+                <DataItem id="thTotExtM" name="toolhead_total_extrusion_mass" type="MASS" category="SAMPLE" units="KILOGRAM" />
+                <DataItem id="thTotExtL" name="toolhead_total_extrusion_length" type="LENGTH" category="SAMPLE" units="MILLIMETER" />
+                <DataItem id="thExtTime" name="toolhead_total_extrusion_time" type="PROCESS_TIMER" subtype="x:LIFETIME" category="SAMPLE" units="SECOND" />
+                <DataItem id="thRetrCnt" name="toolhead_total_retract_count" type="x:PROCESS_COUNT" subtype="x:LIFETIME" category="EVENT" />
+                <DataItem id="thRefCnt" name="toolhead_refurbishment_count" type="x:PROCESS_COUNT" subtype="x:LIFETIME" category="EVENT" />
+              </DataItems>
+              <Compositions>
+                <Composition type="x:Extruder" id="noz" name="nozzle">
+                  <Description manufacturer="MakerBot Industries" serialNumber="0.4mm">0.4mm Brass Nozzle</Description>
+                </Composition>
+                <Composition type="FAN" id="afan" name="active_cooling_fan">
+                  <Description manufacturer="Fonsoning" serialNumber="FSY40S24M">40mm Fan</Description>
+                </Composition>
+                <Composition type="HOPPER" id="fspool" name="loaded_spool">
+                  <Description manufacturer="MakerBot Industries" serialNumber="1kg">1kg Spool</Description>
+                </Composition>
+                <Composition type="MOTOR" id="amot" name="a_motor">
+                  <Description manufacturer="Pololu" serialNumber="NEMA17">NEMA17 Stepper Motor</Description>
+                </Composition>
+              </Compositions>
+            </Loader>
+          </Components>
+        </Auxiliaries>
+        <Controller id="mboard">
+          <Components>
+            <Path id="path1">
+              <DataItems>
+                <DataItem id="exec" name="execution" type="EXECUTION" category="EVENT"></DataItem>
+                <DataItem id="lcd" name="lcd_state" type="INTERFACE_STATE" category="EVENT"><![CDATA[ENABLED||DISABLED]]></DataItem>
+                <DataItem id="cmnt" name="comment" type="LINE_LABEL" category="EVENT"><![CDATA[string]]></DataItem>
+                <DataItem id="oper" name="user" type="USER" subtype="SET_UP" category="EVENT"><![CDATA[user that sent the file]]></DataItem>
+                <DataItem id="thing" name="thing_id" type="PALLET_ID" category="EVENT"><![CDATA[thing_id]]></DataItem>
+                <DataItem id="prog" name="program" type="PROGRAM" category="EVENT"><![CDATA[filename]]></DataItem>
+              </DataItems>
+            </Path>
+          </Components>
+        </Controller>
+        <Resources id="external" name="external_resources">
+          <Components>
+            <Materials id="spool" name="spool">
+              <DataItems>
+                <DataItem id="spMatTemp" name="material_glass_temperature" type="TEMPERATURE" subType="x:PROGRAMMED" category="SAMPLE" compositionId="noz" units="CELSIUS"/>
+                <DataItem id="spMatType" name="material_type" type="MATERIAL" category="EVENT" compositionId="fspool"><![CDATA[impla||pla||etc.]]></DataItem>
+                <DataItem id="spStdSize" name="material_capacity" type="MASS" category="SAMPLE" units="KILOGRAM" />
+                <DataItem id="spRemSize" name="material_remaining" type="MASS" category="SAMPLE" units="KILOGRAM" />
+                <DataItem id="spExtruded" name="material_extruded" type="MASS" category="SAMPLE" units="KILOGRAM" />
+              </DataItems>
+            </Materials>
+            <Personnel id="user" name="authorized_user">
+              <DataItems>
+                
+              </DataItems>
+            </Personnel>
+          </Components>
+        </Resources>
+      </Components>
+    </Device>
+  </Devices>
+</MTConnectDevices>

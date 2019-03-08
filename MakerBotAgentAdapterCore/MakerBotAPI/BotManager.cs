@@ -44,7 +44,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       //this.xDoc.LoadXml()
 
       if (autoDiscover) {
-        this.Discover();
+        this.Discover(true);
       }
     }
     public void Save(){

@@ -16,6 +16,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       private string _at_cam;
 
       private RPC _rpc;
+      public event EventHandler RpcNotificationRelay;
       public enum AccessTokenContexts {
         jsonrpc,
         put,
@@ -46,8 +47,15 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       public void ConnectRPC() {
         if (this._rpc == null) {
           this._rpc = new RPC(this.Host, this.Port, this.GetAccessToken(AccessTokenContexts.jsonrpc));
+          this._rpc.RpcNotification += _rpc_RpcNotification;
         }
       }
+
+      private void _rpc_RpcNotification(object sender, EventArgs e) {
+        this._relayRpcNotificationEvent(sender, e as RPC.RpcNotificationEventArgs);
+        //throw new NotImplementedException();
+      }
+
       private void ConnectRPC(string auth) {
         this.AuthenticationCode = auth;
         this.ConnectRPC();
@@ -56,6 +64,9 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       public JObject RawRequest(string method, object parameters = null){
         return this._rpc.Request(method, parameters);
       }
+      //public JObject RawNotificationRequest(string method, object parameters = null){
+      //  return this._rpc.RequestNotification(method, parameters);
+      //}
       public string GetAccessToken(AccessTokenContexts ctx){
         switch (ctx) {
           case AccessTokenContexts.jsonrpc:
@@ -169,6 +180,11 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           throw new EntryPointNotFoundException();
         }
       }
+    
+      private void _relayRpcNotificationEvent(object sender, RPC.RpcNotificationEventArgs e){
+        this.RpcNotificationRelay?.Invoke(sender, e);
+      }
+
     }
   }
 }

@@ -434,7 +434,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
     [Obsolete("Method not tested")]
     public static JObject MachineQueryCommand(this Makerbot.CommunicationConnection cnn, string machineFunc, object parameters, bool ignoreToolErrors = false) {
       // parameters = params
-      throw new NotImplementedException();
+      //throw new NotImplementedException();
       JObject obj = cnn.RawRequest("machine_query_command", new {
         machine_func = machineFunc,
         @params = parameters,
@@ -615,9 +615,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       });
       return obj;
     }
-    [Obsolete("Method not tested")]
     public static JObject BirdwingList(this Makerbot.CommunicationConnection cnn, string path) {
-      //throw new NotImplementedException();
       JObject obj = cnn.RawRequest("birdwing_list", new {
         path = path
       });
@@ -692,12 +690,12 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       JObject obj = cnn.RawRequest("get_config", null);
       return obj.ToObject<DTOs.RPC.Config>();
     }
-    public static DTOs.RPC.SystemInformation GetSystemInformation(this Makerbot.CommunicationConnection cnn) {
+    public static JObject GetSystemInformation(this Makerbot.CommunicationConnection cnn) {
       JObject obj = cnn.RawRequest("get_system_information", null);
       JsonSerializer _writer = new JsonSerializer() {
         NullValueHandling = NullValueHandling.Include
       };
-      return obj.ToObject<DTOs.RPC.SystemInformation>(_writer);
+      return obj;//.ToObject<DTOs.RPC.SystemInformation>(_writer);
       //return JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.None, _writer);
       //return obj;
     }
@@ -846,7 +844,9 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
 
     [Obsolete("Method not tested")]
     public static JObject SystemNotification(this Makerbot.CommunicationConnection cnn, object info) {
-      throw new NotImplementedException();
+      //throw new NotImplementedException();
+      JObject obj = cnn.RawRequest("camera_frame", null);
+      return obj;
     }
     [Obsolete("Method not tested")]
     public static JObject StateNotification(this Makerbot.CommunicationConnection cnn, object info) {
@@ -887,7 +887,12 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
     // JsonRpcMethod
     [Obsolete("Method not tested")]
     public static JObject GetRaw(this Makerbot.CommunicationConnection cnn, string id, int length) {
-      throw new NotImplementedException();
+      //throw new NotImplementedException();
+      JObject obj = cnn.RawRequest("get_raw", new {
+        id = id,
+        length = length
+      });
+      return obj;
     }
   
     [Obsolete("Method not supported")]

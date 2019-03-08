@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<MTConnectErrors xmlns="urn:mtconnect.org:MTConnectDevices:1.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:m="urn:mtconnect.org:MTConnectError:1.4" xsi:schemaLocation="urn:mtconnect.org:MTConnectError:1.4 /schemas/MTConnectError_1.4.xsd">
+  <Header bufferSize="10" instanceId="1" creationTime="2019-03-06T11:01:00" sender="{Environment.GetEnvironmentVariable('COMPUTERNAME') ?? Environment.GetEnvironmentVariable('HOSTNAME')}" version="1.4" />
+  <Errors>
+    <Error errorCode="INVALID_REQUEST">No Assets Found.</Error>
+  </Errors>
+</MTConnectErrors>

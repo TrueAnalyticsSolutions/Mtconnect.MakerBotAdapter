@@ -112,6 +112,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
         xRoot.AppendChild(xDoc.CreateElement("ClientId")).InnerText = this.Connection.ClientId;
         xRoot.AppendChild(xDoc.CreateElement("ClientSecret")).InnerText = this.Connection.ClientSecret;
         xRoot.AppendChild(xDoc.CreateElement("AuthenticationCode")).InnerText = this.Connection.AuthenticationCode;
+        xRoot.AppendChild(xDoc.CreateElement("BotType")).InnerText = this.BotType;
       }
       return xRoot;
     }
