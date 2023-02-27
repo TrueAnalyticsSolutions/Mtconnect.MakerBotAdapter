@@ -17,7 +17,7 @@
     <PackageReference Include="Consoul" Version="1.5.8" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="2.2.0" />
     <PackageReference Include="MTConnectAdapterCore" Version="1.0.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
   <ItemGroup>
