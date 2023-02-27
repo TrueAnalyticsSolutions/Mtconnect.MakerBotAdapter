@@ -135,6 +135,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
               string answerResponse = response["answer"].ToString();
               if (answerResponse == "accepted") {
                 this.AuthenticationCode = response["code"].ToString();
+                                ConnectRPC();
                 this._rpc.Authenticate(this.AuthenticationCode);
                 break;
               } else if (answerResponse == "rejected") {
@@ -161,8 +162,9 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
           this.AuthenticationCode = authCode;
         }
         if (string.IsNullOrEmpty(this.AuthenticationCode)) {
-          throw new UnauthorizedAccessException("Authentication Code cannot be null or empty.");
-        }
+                    RequestAuthentication();
+                    //throw new UnauthorizedAccessException("Authentication Code cannot be null or empty.");
+                }
         JObject response = JsonConvert.DeserializeObject<JObject>(FCGI.Send(this.Host, "auth", new {
           response_type = "token",
           client_id = this.ClientId,

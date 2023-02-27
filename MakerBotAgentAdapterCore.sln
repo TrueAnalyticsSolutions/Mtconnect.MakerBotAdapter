@@ -1,9 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28010.2048
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33403.182
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MakerBotAgentAdapterCore", "MakerBotAgentAdapterCore\MakerBotAgentAdapterCore.csproj", "{7A6D2FDC-E0B6-4908-94CC-2F2F810A8F9C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MakerBotAgentAdapterCore", "MakerBotAgentAdapterCore\MakerBotAgentAdapterCore.csproj", "{7A6D2FDC-E0B6-4908-94CC-2F2F810A8F9C}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MakerBot.Rpc", "MakerBot.Rpc\MakerBot.Rpc.csproj", "{597D1EFA-6117-4E73-A4A3-1DB1FE37CD64}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playground", "Playground\Playground.csproj", "{44E8C9F9-91F1-4966-9407-3E9D58BFCFAA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mtconnect.MakerBotAdapter", "Mtconnect.MakerBotAdapter\Mtconnect.MakerBotAdapter.csproj", "{CAB4ABAD-FD4A-452E-A262-7376764FD0B1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +21,18 @@ Global
 		{7A6D2FDC-E0B6-4908-94CC-2F2F810A8F9C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7A6D2FDC-E0B6-4908-94CC-2F2F810A8F9C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7A6D2FDC-E0B6-4908-94CC-2F2F810A8F9C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{597D1EFA-6117-4E73-A4A3-1DB1FE37CD64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{597D1EFA-6117-4E73-A4A3-1DB1FE37CD64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{597D1EFA-6117-4E73-A4A3-1DB1FE37CD64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{597D1EFA-6117-4E73-A4A3-1DB1FE37CD64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44E8C9F9-91F1-4966-9407-3E9D58BFCFAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44E8C9F9-91F1-4966-9407-3E9D58BFCFAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44E8C9F9-91F1-4966-9407-3E9D58BFCFAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44E8C9F9-91F1-4966-9407-3E9D58BFCFAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CAB4ABAD-FD4A-452E-A262-7376764FD0B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CAB4ABAD-FD4A-452E-A262-7376764FD0B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CAB4ABAD-FD4A-452E-A262-7376764FD0B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CAB4ABAD-FD4A-452E-A262-7376764FD0B1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

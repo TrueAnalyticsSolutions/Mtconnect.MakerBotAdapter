@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using System.Xml;
 //using System.Web;
 using MakerBotAgentAdapterCore;
+using ConsoulLibrary;
 
 namespace MakerBotAgentAdapterCore.MakerBotAPI {
   public class BotManager : Debugable {
@@ -79,7 +80,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
       write("\tBroadcasting...");
       write("\t\t" + s, ConsoleColor.Gray);
       this.BroadcastChannel.SendTo(byteArray, remoteEndPoint);
-      int maxAttempts = 2;
+      int maxAttempts = 5;
       int idx = 0;
       do {
         System.Threading.Thread.Sleep(1000); // Sleep 1 second
@@ -92,6 +93,7 @@ namespace MakerBotAgentAdapterCore.MakerBotAPI {
 
           write("\t" + resp, ConsoleColor.Green);
           bots.Add(new Makerbot(objResponse));
+          break;
         } catch (SocketException se) {
           write("\tRetrying [" + (idx + 1).ToString() + "/" + maxAttempts.ToString() + "]...", ConsoleColor.Yellow);
           if (idx == maxAttempts - 1) {

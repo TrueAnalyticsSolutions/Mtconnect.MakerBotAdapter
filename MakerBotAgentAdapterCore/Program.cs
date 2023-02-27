@@ -1,61 +1,18 @@
 ﻿using System;
 using Newtonsoft.Json;
 using MakerBotAgentAdapterCore.MakerBotAPI;
+using ConsoulLibrary;
 
 namespace MakerBotAgentAdapterCore {
   public class Program {
-    public static void write(string msg, ConsoleColor clr = ConsoleColor.White){
-      Console.ForegroundColor = clr;
-      Console.WriteLine(msg);
-    }
-    public static string Input(string message, ConsoleColor color = ConsoleColor.White, bool allowEmpty = false, bool clearConsole = true) {
-      string input = "";
-      do {
-        if (clearConsole) {
-          Console.Clear();
-        }
-        write(message, color);
-        input = Console.ReadLine();
-        if (allowEmpty) { break; }
-      } while (string.IsNullOrEmpty(input));
-      return input;
-    }
-    public static int Choose(string message, params string[] options){
-      int choice = -1;
-      do {
-        Console.Clear();
-        write(message, ConsoleColor.Yellow);
-        for (int i = 0; i < options.Length; i++) {
-          string option = options[i];
-          write(string.Format("{0}.{1:-2}", (i + 1).ToString(), option), ConsoleColor.Green);
-        }
-        if (!int.TryParse(Input("Choose from the options above", clearConsole:false), out choice)){
-          choice = -1;
-        }
-      } while (choice <= 0);
-      return choice;
-    }
-    public static bool Ask(string message, ConsoleColor color = ConsoleColor.White) {
-      string input = "null";
-      do {
-        Console.Clear();
-        write(message, color);
-        write("Yes = y\t\tNo = n or {Enter}");
-        input = Console.ReadLine();
-        input = input.ToLower();
-        if (string.IsNullOrEmpty(input)) { input = "n"; }
-      } while (!(input == "y" || input == "n"));
-      return input == "y";
-    }
     static void Main(string[] args) {
-
-      if (Ask("Would you like to run the MTConnect Adapter?", ConsoleColor.Yellow)) {
+      if (Consoul.Ask("Would you like to run the MTConnect Adapter?")) {
         AdapterInstance adapter = new AdapterInstance(initialPort: 9000, rate: 2000, autoStart: true);
         adapter.AdapterSentChanges += Adapter_AdapterSentChanges;
         while (!Console.KeyAvailable) {
           Console.Clear();
 
-          write("Press any key to stop...", ConsoleColor.Gray);
+          Consoul.Write("Press any key to stop...", ConsoleColor.Gray);
           System.Threading.Thread.Sleep(30 * 1000);
         }
         adapter.StopAll();
@@ -64,45 +21,45 @@ namespace MakerBotAgentAdapterCore {
         botManager.DebugMessage += _DebugMessage;
         botManager.Discover(true);
         if (botManager.Bots.Count > 0) {
-          write("Found " + botManager.Bots.Count.ToString() + " bots", ConsoleColor.Green);
+          Consoul.Write($"Found {botManager.Bots.Count} bots", ConsoleColor.Green);
           foreach (Makerbot bot in botManager.Bots) {
-            write("\t" + bot.Name + " - " + bot.Serial);
+            Consoul.Write($"\t{bot.Name} - {bot.Serial}");
             if (bot.Connection == null) {
               bot.Connect(true);
             }
             bot.Connection.RpcNotificationRelay += Connection_RpcNotificationRelay;
             int opt = -1;
             do {
-              opt = Choose("Choose an action",
+              opt = Consoul.Prompt("Choose an action", true, new string[] {// Choose("Choose an action",
                 "Monitor System Information",
                 "Run Custom JSON-RPC Command",
                 "Select a Command",
                 "Show Authorization Code",
                 "Export List of Commands",
                 "Listen to Notifications",
-                "Exit");
+                "Exit" });
               switch (opt) {
                 case 1:
                   while (!Console.KeyAvailable) {
                     Console.Clear();
                     var si = bot.Connection.GetSystemInformation();
-                    write(bot.Name);
+                    Consoul.Write(bot.Name);
                     string data = Newtonsoft.Json.JsonConvert.SerializeObject(si);
-                    write(string.Format("{0}", data), ConsoleColor.Green);
-                    write("Press any key to stop...", ConsoleColor.Gray);
+                    Consoul.Write(string.Format("{0}", data), ConsoleColor.Green);
+                    Consoul.Write("Press any key to stop...", ConsoleColor.Gray);
                     System.Threading.Thread.Sleep(1500);
                   }
                   Console.ReadKey(false);
                   opt = -1;
                   break;
                 case 2:
-                  string command = Input("Enter a custom JSON-RPC command:", ConsoleColor.Yellow);
+                  string command = Consoul.Input("Enter a custom JSON-RPC command:", ConsoleColor.Yellow);
                   object parameters = null;
-                  if (Ask("Would you like to add parameters to '" + command + "'?")){
-                    parameters = Newtonsoft.Json.JsonConvert.DeserializeObject(Input("Type JSON parameters as an object", clearConsole: false));
+                  if (Consoul.Ask("Would you like to add parameters to '" + command + "'?")){
+                    parameters = Newtonsoft.Json.JsonConvert.DeserializeObject(Consoul.Input("Type JSON parameters as an object"));
                   }
                   string response = Newtonsoft.Json.JsonConvert.SerializeObject(bot.Connection.RawRequest(command, parameters));//.RunCustomCommand(command);
-                  write(response, ConsoleColor.Magenta);
+                  Consoul.Write(response, ConsoleColor.Magenta);
                   Console.ReadLine();
                   opt = -1;
                   break;
@@ -120,7 +77,7 @@ namespace MakerBotAgentAdapterCore {
                   "Machine Query Command",
                   "Capture Image (outputFile:" + pngLocation + ")"
                 };
-                  cmdChoice = Choose("Which command would you like to execute?", availableCommands);
+                  cmdChoice = Consoul.Prompt("Which command would you like to execute?", true, availableCommands);
                   string cmdResponse = "";
                   switch (cmdChoice) {
                     case 1:
@@ -150,21 +107,21 @@ namespace MakerBotAgentAdapterCore {
                   //  System.IO.File.WriteAllText("Command Responses.csv", output);
                   //}
                   if (!string.IsNullOrEmpty(cmdResponse)) {
-                    write(cmdResponse, ConsoleColor.Magenta);
+                    Consoul.Write(cmdResponse, ConsoleColor.Magenta);
                     Console.ReadLine();
                   }
                   opt = -1;
                   break;
                 case 4:
-                  write("Authorization Code: " + bot.Connection.AuthenticationCode);
+                  Consoul.Write($"Authorization Code: {bot.Connection.AuthenticationCode}");
                   break;
                 case 5:
-                  write("Croissant Methods");
+                  Consoul.Write("Croissant Methods");
                   Type t = typeof(MakerBotAPI.CroissantAPI);
                   System.Reflection.MethodInfo[] croissantMethods = t.GetMethods(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy);
                   string strMethod = "";
                   foreach (System.Reflection.MethodInfo croissantMethod in croissantMethods) {
-                    write("\t" + croissantMethod.Name);
+                    Consoul.Write("\t{croissantMethod.Name}");
                     ObsoleteAttribute attr = (ObsoleteAttribute)Attribute.GetCustomAttribute(croissantMethod, typeof(ObsoleteAttribute));
                     if (attr != null) {
                       strMethod += "// " + attr.Message + "\r\n";
@@ -195,9 +152,8 @@ namespace MakerBotAgentAdapterCore {
                   }
                   string croissantMethodsFilePath = "Croissant API Methods.txt";
                   System.IO.File.WriteAllText(croissantMethodsFilePath, strMethod);
-                  write("Saved methods to '" + croissantMethodsFilePath + "'", ConsoleColor.Green);
-                  write("Press Enter to continue...");
-                  Console.ReadLine();
+                  Consoul.Write($"Saved methods to '{croissantMethodsFilePath}'", ConsoleColor.Green);
+                  Consoul.Wait();
                   break;
                 case 6:
                   allowNotificationResponses = true;
@@ -207,7 +163,7 @@ namespace MakerBotAgentAdapterCore {
                     //write(bot.Name);
                     //string data = Newtonsoft.Json.JsonConvert.SerializeObject(si);
                     //write(string.Format("{0}", data), ConsoleColor.Green);
-                    write("Press any key to stop...", ConsoleColor.Gray);
+                    Consoul.Write("Press any key to stop...", ConsoleColor.Gray);
                     System.Threading.Thread.Sleep(30 * 1000); // Clear every 30 seconds
                   }
                   allowNotificationResponses = false;
@@ -222,20 +178,19 @@ namespace MakerBotAgentAdapterCore {
             } while (opt <= 0);
             //Console.ReadKey();
           }
-          if (Ask("Would you like to save these machines?", ConsoleColor.Yellow)) {
+          if (Consoul.Ask("Would you like to save these machines?")) {
             botManager.Save();
           }
         }
       }
 
 
-      write("Press Enter to exit...");
-      Console.ReadLine();
+      Consoul.Wait();
     }
 
     private static void Adapter_AdapterSentChanges(object sender, EventArgs e) {
       SentChangedEventArgs es = e as SentChangedEventArgs;
-      write(string.Format("Sent {0} changed values to http://localhost:{1} for bot {2} @{3}", es.ChangedItems.Count.ToString(), es.AdapterPort.ToString(), es.BotSerial, es.Timestamp.ToString()), ConsoleColor.Magenta);
+      Consoul.Write(string.Format("Sent {0} changed values to http://localhost:{1} for bot {2} @{3}", es.ChangedItems.Count.ToString(), es.AdapterPort.ToString(), es.BotSerial, es.Timestamp.ToString()), ConsoleColor.Magenta);
       //throw new NotImplementedException();
     }
 
@@ -253,14 +208,14 @@ namespace MakerBotAgentAdapterCore {
         }else{
           clr = ConsoleColor.Magenta;
         }
-        write("Received Notification from RPC Connection Relay: '" + rpcArgs.method + "'\r\n" + JsonConvert.SerializeObject(rpcArgs.rawResponse), clr);
+        Consoul.Write($"Received Notification from RPC Connection Relay: '{rpcArgs.method}'\r\n{JsonConvert.SerializeObject(rpcArgs.rawResponse)}", clr);
       }
       //throw new NotImplementedException();
     }
 
     private static void _DebugMessage(object sender, EventArgs e) {
       DebugMessageArgs eas = e as DebugMessageArgs;
-      write(eas.Message, eas.Color);
+      Consoul.Write(eas.Message, eas.Color);
       //throw new NotImplementedException();
     }
   }

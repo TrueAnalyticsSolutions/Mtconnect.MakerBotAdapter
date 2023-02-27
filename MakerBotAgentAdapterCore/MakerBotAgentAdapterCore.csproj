@@ -14,14 +14,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Consoul" Version="1.5.8" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="2.2.0" />
+    <PackageReference Include="MTConnectAdapterCore" Version="1.0.1" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="MTConnectAdapterCore">
-      <HintPath>..\..\MTConnectAdapterCore\MTConnectAdapterCore\bin\Debug\netcoreapp2.1\publish\MTConnectAdapterCore.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
   <ItemGroup>
