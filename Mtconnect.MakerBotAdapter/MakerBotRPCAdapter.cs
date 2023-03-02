@@ -12,6 +12,7 @@ namespace Mtconnect.MakerBotAdapter
 {
     public class MakerBotRPCAdapter : IAdapterSource, IDisposable
     {
+        private ILoggerFactory _loggerFactory;
         private ILogger _logger { get; set; }
         
         public event DataReceivedHandler OnDataReceived;
@@ -22,34 +23,20 @@ namespace Mtconnect.MakerBotAdapter
 
         private System.Timers.Timer _timer { get; set; } = new System.Timers.Timer();
 
-        public MakerBot.Machine Machine { get; set; }
+        public MakerBot.Machine Machine { get; set; } = null;
 
+        private string _serialNumber { get; set; }
+        private string _authCode { get; set; }
         private MakerBotMachine _model { get; set; } = new MakerBotMachine();
 
-        public MakerBotRPCAdapter(string address, int port = 9999, string authCode = null, double pollRate = 5_000, ILoggerFactory loggerFactory = default)
+        public MakerBotRPCAdapter(string serialNumber, string authCode = null, double pollRate = 5_000, ILoggerFactory loggerFactory = default)
         {
             if (pollRate <= 0) throw new IndexOutOfRangeException("Poll rate cannot be less than or equal to zero");
-
+            _loggerFactory = loggerFactory;
             _logger = loggerFactory?.CreateLogger<MakerBotRPCAdapter>();
 
-            IPAddress ipAddress = null;
-            if (!IPAddress.TryParse(address, out ipAddress))
-            {
-                throw new ArgumentException("Failed to parse machine address", nameof(address));
-            }
-
-            Machine = new MakerBot.Machine(ipAddress, port, loggerFactory);
-            Machine.Config.Address = ipAddress.ToString();
-            Machine.Config.Port = port;
-
-            if (!string.IsNullOrEmpty(authCode))
-            {
-                _logger?.LogInformation("Using Authorization Code: {AuthCode}", authCode);
-                Machine.Config.AuthenticationCode = authCode;
-            } else
-            {
-                _logger?.LogWarning("Recommended to provide an authCode for the RPC connection");
-            }
+            _serialNumber = serialNumber;
+            _authCode = authCode;
 
             _timer.Interval = pollRate;
             _timer.Elapsed += _timer_Elapsed;
@@ -76,18 +63,29 @@ namespace Mtconnect.MakerBotAdapter
 
         public void Start(CancellationToken token = default)
         {
-            Machine.Connection.OnResponse += Connection_OnResponse;
 
             using (var machineFactory = new MachineFactory())
             {
                 var discoveries = machineFactory.Discover();
                 if (discoveries != null)
                 {
-                    var match = discoveries.FirstOrDefault(o => o.ip == Machine.Config.Address && o.port == Machine.Config.Port.ToString());
+                    var match = discoveries.FirstOrDefault(o => o.iserial == _serialNumber);
                     if (match != null)
                     {
-                        _model.Port = int.Parse(match.port);
-                        _model.IPv4 = match.ip;
+                        Machine = new MakerBot.Machine(IPAddress.Parse(match.ip), int.Parse(match.port), _loggerFactory);
+                        Machine.Config.Address = match.ip;
+                        Machine.Config.Port = int.Parse(match.port);
+
+                        if (!string.IsNullOrEmpty(_authCode))
+                        {
+                            _logger?.LogInformation("Using Authorization Code: {AuthCode}", _authCode);
+                            Machine.Config.AuthenticationCode = _authCode;
+                        }
+                        else
+                        {
+                            _logger?.LogWarning("Recommended to provide an authCode for the RPC connection");
+                        }
+                        Machine.Connection.OnResponse += Connection_OnResponse;
                         Machine.Config.Serial = match.iserial;
                         Machine.Config.Name = match.machine_name;
                         Machine.SSL = int.Parse(match.ssl_port);
@@ -98,6 +96,9 @@ namespace Mtconnect.MakerBotAdapter
                         Machine.FirmwareVersion = match.firmware_version.ToString();
                         Machine.MachineType = match.machine_type;
                         Machine.PID = match.pid;
+
+                        _model.Port = int.Parse(match.port);
+                        _model.IPv4 = match.ip;
                         _logger?.LogDebug("Found machine through network discovery");
                     } else
                     {
@@ -108,7 +109,14 @@ namespace Mtconnect.MakerBotAdapter
                     _logger?.LogWarning("No machines discovered on the network");
                 }
             }
-            Machine.Start("MTConnectAdapter", token);
+            if (Machine == null)
+            {
+                var missingMachine = new Exception(("Machine was not initialized"));
+                _logger?.LogWarning(missingMachine, missingMachine.Message);
+                Stop();
+                throw missingMachine;
+            }
+            Machine.Start(token);
 
             // TODO: Get more machine information to fill in config
             var sysInfo = Machine.Connection.GetSystemInformation().Result;
@@ -232,8 +240,12 @@ namespace Mtconnect.MakerBotAdapter
         public void Stop(Exception ex = null)
         {
             _timer.Stop();
-            Machine.Stop();
-            Machine.Connection.OnResponse -= Connection_OnResponse;
+
+            if (Machine != null)
+            {
+                Machine.Stop();
+                Machine.Connection.OnResponse -= Connection_OnResponse;
+            }
 
             OnAdapterSourceStopped?.Invoke(this, new AdapterSourceStoppedEventArgs(ex));
         }

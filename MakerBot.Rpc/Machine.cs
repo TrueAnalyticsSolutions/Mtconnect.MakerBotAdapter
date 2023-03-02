@@ -51,7 +51,7 @@ namespace MakerBot
             MachineType = broadcastResponse.machine_type;
         }
 
-        public void Start(string username, CancellationToken cancellationToken = default)
+        public void Start(CancellationToken cancellationToken = default)
         {
             _logger?.LogInformation("Starting machine connection @{Address}...", Address);
             Connection?.Start(cancellationToken);
@@ -87,7 +87,7 @@ namespace MakerBot
 
 
             _logger?.LogDebug("Shaking hands with machine @{Address}...", Address);
-            var handshake = Connection.Handshake(username)?.Result;
+            var handshake = Connection.Handshake()?.Result;
             if (handshake == null)
             {
                 var handshakeIncomplete = new Exception("Failed to complete handshake");

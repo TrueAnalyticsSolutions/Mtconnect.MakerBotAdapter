@@ -73,7 +73,7 @@ internal class Program
             var modelSources = new List<MakerBotRPCAdapter>();
             foreach (var machine in machineConfigs)
             {
-                var model = new MakerBotRPCAdapter(machine.Address, machine.Port, machine.AuthenticationCode, 5000, loggerFactory);
+                var model = new MakerBotRPCAdapter(machine.Serial, machine.AuthenticationCode, 5000, loggerFactory);
                 modelSources.Add(model);
             }
             adapter.Start(modelSources.ToArray(), token: cancellationSource.Token);
