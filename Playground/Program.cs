@@ -3,10 +3,13 @@ using MakerBot;
 using MakerBot.Rpc;
 using Microsoft.Extensions.Logging;
 using Mtconnect;
+using Mtconnect.AdapterInterface.Contracts.Attributes;
+using Mtconnect.AdapterInterface.DeviceConfiguration;
 using Mtconnect.MakerBotAdapter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net;
+using System.Reflection;
 
 internal class Program
 {
@@ -78,6 +81,8 @@ internal class Program
             }
             adapter.Start(modelSources.ToArray(), token: cancellationSource.Token);
 
+            Task.Run(() => SaveDevices(adapter));
+
             Consoul.Write("Reporting: AVAILABILITY, Mouse X-Position, Mouse Y-Position, Active Window Title");
             Consoul.Write($"Adapter running @ http://*:{adapter.Port}");
 
@@ -110,6 +115,15 @@ internal class Program
             Consoul.Write("Done!", ConsoleColor.Green);
         }
 
+    }
+
+    private static async void SaveDevices(TcpAdapter adapter)
+    {
+        System.Threading.Thread.Sleep(30000);
+        var dcf = new DeviceConfigurationFactory();
+        var doc = dcf.Create(adapter);
+        string filename = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Devices.xml");
+        doc.Save(filename);
     }
 
     private static void Adapter_OnStarted(Adapter sender, object e)
