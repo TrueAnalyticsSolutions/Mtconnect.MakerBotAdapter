@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mtconnect.AdapterInterface" Version="2.0.0-beta.36" />
+    <PackageReference Include="Mtconnect.AdapterSdk" Version="2.0.0-beta.61" />
   </ItemGroup>
 
   <ItemGroup>

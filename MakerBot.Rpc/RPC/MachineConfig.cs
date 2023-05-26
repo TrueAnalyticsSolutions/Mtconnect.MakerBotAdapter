@@ -1,4 +1,10 @@
-﻿namespace MakerBot.Rpc
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace MakerBot.Rpc
 {
     public class MachineConfig : JsonRpcMessage<MachineConfig.Result>
     {
@@ -6,15 +12,16 @@
         {
             public Acceleration acceleration;
             public string bot_type;
-            public GantryConfiguration gantry_configuration;
-            public ExtraSlicerSettings extra_slicer_settings;
-            public AxesDouble steps_per_mm;
-            public AxesDouble start_position;
-            public AxesInt max_speed_mm_per_second;
-            public int makerbot_generation;
             public AxesInt build_volume;
-            public string version;
+            public ExtraSlicerSettings extra_slicer_settings;
             public ExtruderProfiles extruder_profiles;
+            public GantryConfiguration gantry_configuration;
+            public int makerbot_generation;
+            public AxesInt max_speed_mm_per_second;
+            public AxesDouble start_position;
+            public AxesDouble steps_per_mm;
+
+            public string version;
 
             public class Acceleration
             {
@@ -40,11 +47,14 @@
             }
             public class ExtruderProfiles
             {
-                public ExtruderProfile mk13;
-                public ExtruderProfile mk12;
                 public AttachedExtruder[] attached_extruders;
-                public dynamic supported_extruders;
-                public ExtruderProfile mk13_impla;
+                public Dictionary<string, string> supported_extruders;
+                public Dictionary<string, ExtruderProfile> extruder_profiles => _additionalData.ToDictionary(o => o.Key, o => o.Value.ToObject<ExtruderProfile>());
+                [JsonExtensionData]
+                private IDictionary<string, JToken> _additionalData;
+                //public ExtruderProfile mk12;
+                //public ExtruderProfile mk13;
+                //public ExtruderProfile mk13_impla;
 
                 public class AttachedExtruder
                 {
@@ -57,12 +67,12 @@
                     public double nozzle_diameter;
                     public ARate max_speed_mm_per_second;
                     public ARate steps_per_mm;
-                    public Materials materials;
+                    public Dictionary<string, Materials.Material> materials;
 
                     public class Materials
                     {
-                        public Material pla;
-                        public Material im_pla;
+                        //public Material pla;
+                        //public Material im_pla;
 
                         public class Material
                         {
@@ -84,6 +94,30 @@
                                 public ARate impulse_speed_limit_mm_per_s;
                             }
                         }
+                    }
+                }
+                public class ExtruderProfilesConverter : JsonConverter<Dictionary<string, ExtruderProfile>>
+                {
+                    public override void WriteJson(JsonWriter writer, Dictionary<string, ExtruderProfile> value, JsonSerializer serializer)
+                    {
+                        throw new NotImplementedException();
+                    }
+
+                    public override Dictionary<string, ExtruderProfile> ReadJson(JsonReader reader, Type objectType, Dictionary<string, ExtruderProfile> existingValue, bool hasExistingValue, JsonSerializer serializer)
+                    {
+                        var profiles = new Dictionary<string, ExtruderProfile>();
+
+                        while (reader.Read())
+                        {
+                            if (reader.TokenType == JsonToken.PropertyName)
+                            {
+                                var propertyName = reader.Value.ToString();
+                                var profile = serializer.Deserialize<ExtruderProfile>(reader);
+                                profiles.Add(propertyName, profile);
+                            }
+                        }
+
+                        return profiles;
                     }
                 }
             }

@@ -1,15 +1,11 @@
 ﻿using ConsoulLibrary;
 using MakerBot;
-using MakerBot.Rpc;
 using Microsoft.Extensions.Logging;
 using Mtconnect;
-using Mtconnect.AdapterInterface.Contracts.Attributes;
-using Mtconnect.AdapterInterface.DeviceConfiguration;
+using Mtconnect.AdapterSdk.DeviceConfiguration;
 using Mtconnect.MakerBotAdapter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Net;
-using System.Reflection;
 
 internal class Program
 {
@@ -20,6 +16,7 @@ internal class Program
     {
         var loggerFactory = LoggerFactory.Create((o) =>
         {
+            o.SetMinimumLevel(LogLevel.Debug);
             o.AddConsoulLogger();
 
 #if DEBUG
@@ -35,11 +32,14 @@ internal class Program
             var loadConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(configPath));
             if (loadConfig != null && loadConfig.ContainsKey("machines"))
             {
-                var configMachines = loadConfig["machines"].ToArray();
-                foreach (var jConfig in configMachines)
+                var configMachines = loadConfig["machines"]?.ToArray();
+                if (configMachines?.Length > 0)
                 {
-                    var machineConfig = jConfig.ToObject<MakerBot.MachineConfig>();
-                    if (machineConfig != null) machineConfigs.Add(machineConfig);
+                    foreach (var jConfig in configMachines)
+                    {
+                        var machineConfig = jConfig.ToObject<MakerBot.MachineConfig>();
+                        if (machineConfig != null) machineConfigs.Add(machineConfig);
+                    }
                 }
             }
         }
@@ -81,7 +81,7 @@ internal class Program
             }
             adapter.Start(modelSources.ToArray(), token: cancellationSource.Token);
 
-            Task.Run(() => SaveDevices(adapter));
+            //Task.Run(() => SaveDevices(adapter));
 
             Consoul.Write("Reporting: AVAILABILITY, Mouse X-Position, Mouse Y-Position, Active Window Title");
             Consoul.Write($"Adapter running @ http://*:{adapter.Port}");
@@ -119,8 +119,8 @@ internal class Program
 
     private static async void SaveDevices(TcpAdapter adapter)
     {
-        System.Threading.Thread.Sleep(30000);
-        var dcf = new DeviceConfigurationFactory();
+        await Task.Delay(30_000);
+        var dcf = new DeviceModelFactory();
         var doc = dcf.Create(adapter);
         string filename = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Devices.xml");
         doc.Save(filename);

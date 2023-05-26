@@ -1,12 +1,15 @@
 ﻿using MakerBot;
 using MakerBot.Rpc;
 using Microsoft.Extensions.Logging;
-using Mtconnect.AdapterInterface.DataItemValues;
-using Newtonsoft.Json;
+using Mtconnect.AdapterSdk.DataItemValues;
+using Mtconnect.MakerBotAdapter.Lookups;
 using System;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using static MakerBot.Rpc.SystemInformation.Result.Toolheads;
 using static System.Net.Mime.MediaTypeNames;
@@ -15,6 +18,17 @@ namespace Mtconnect.MakerBotAdapter
 {
     public class MakerBotRPCAdapter : IAdapterSource, IDisposable
     {
+        private string uuid = null;
+        public string DeviceUuid => uuid ?? (uuid = ToUuid(SerialNumber ?? DeviceName));
+
+        public string DeviceName => Machine?.Config?.Name;
+
+        public string StationId =>Environment.MachineName;
+
+        public string SerialNumber => Machine?.Config?.Serial;
+
+        public string Manufacturer => "MakerBot Industries, LLC";
+
         private ILoggerFactory _loggerFactory;
         private ILogger _logger { get; set; }
         
@@ -27,6 +41,7 @@ namespace Mtconnect.MakerBotAdapter
         private System.Timers.Timer _timer { get; set; } = new System.Timers.Timer();
 
         public MakerBot.Machine Machine { get; set; } = null;
+
 
         private string _serialNumber { get; set; }
         private string _authCode { get; set; }
@@ -59,9 +74,54 @@ namespace Mtconnect.MakerBotAdapter
 
             _model.Controller.Path.ToolOffset = Convert.ToInt32(Machine.Connection.GetZAdjustedOffset().Result);
 
+            // Let system notification update the current toolId, let's use that as a lookup
+            var machineConfig = Machine.MachineConfigResponse;
+            if (machineConfig != null)
+            {
+                string modelId = _model.Auxiliaries?.ModelExtruder?.ExtruderId?.ToString();
+                if (!string.IsNullOrEmpty(modelId))
+                {
+                    string modelType = Machine.MachineConfigResponse?.extruder_profiles?.supported_extruders?[modelId]?.ToString();
+                    if (!string.IsNullOrEmpty(modelType))
+                    {
+                        string modelName = Extruders.GetNameByType(modelType);
+                        if (!string.IsNullOrEmpty(modelName))
+                        {
+                            _model.Auxiliaries.ModelExtruder.Extruder = modelName;
+                        }
+
+                        var materialType = machineConfig.extruder_profiles.extruder_profiles[modelType]?.materials?.FirstOrDefault().Key;
+                        if (!string.IsNullOrEmpty(materialType))
+                        {
+                            _model.Auxiliaries.ModelExtruder.FilamentType = Materials.GetNameByType(materialType);
+                        }
+                    }
+                }
+
+                string supportId = _model.Auxiliaries?.SupportExtruder?.ExtruderId?.ToString();
+                if (!string.IsNullOrEmpty(supportId))
+                {
+                    string supportType = Machine.MachineConfigResponse?.extruder_profiles?.supported_extruders?[supportId]?.ToString();
+                    if (!string.IsNullOrEmpty(supportType))
+                    {
+                        string supportName = Extruders.GetNameByType(supportType);
+                        if (!string.IsNullOrEmpty(supportName))
+                        {
+                            _model.Auxiliaries.SupportExtruder.Extruder = supportName;
+                        }
+
+                        var materialType = machineConfig.extruder_profiles.extruder_profiles[supportType]?.materials?.FirstOrDefault().Key;
+                        if (!string.IsNullOrEmpty(materialType))
+                        {
+                            _model.Auxiliaries.SupportExtruder.FilamentType = Materials.GetNameByType(materialType);
+                        }
+                    }
+                }
+            }
+
             _busy = false;
 
-            OnDataReceived?.Invoke(_model, new DataReceivedEventArgs());
+            OnDataReceived?.Invoke(this, new DataReceivedEventArgs(_model));
         }
 
         public void Start(CancellationToken token = default)
@@ -192,19 +252,19 @@ namespace Mtconnect.MakerBotAdapter
                         // TODO: Trigger an Asset_Changed event in the adapter.
                         /*
                          * "jsonrpc": "2.0", "method": "extruder_change", "params": {
-  "config": {
-    "calibrated": true,
-    "id": 99
-  },
-  "index": 0
-}
+                              "config": {
+                                "calibrated": true,
+                                "id": 99
+                              },
+                              "index": 0
+                            }
                          */
                         // TODO: Ask the machine for more data about this particular extruder
                         break;
                     default:
                         if (obj.ContainsKey("error"))
                         {
-                            _model.Controller.Path.Alarm.Add(AdapterInterface.DataItems.Condition.Level.FAULT, obj["error"]["message"].ToString(), obj["error"]["code"].ToString(), obj["error"]["data"]["name"].ToString());
+                            _model.Controller.Path.Alarm.Add(AdapterSdk.DataItems.Condition.Level.FAULT, obj["error"]["message"].ToString(), obj["error"]["code"].ToString(), obj["error"]["data"]["name"].ToString());
                         } else
                         {
                             _logger?.LogWarning("Unhandled message received: {@Message}", obj);
@@ -215,7 +275,7 @@ namespace Mtconnect.MakerBotAdapter
             {
                 _logger?.LogWarning("Unrecognized, unsolicited message received: {@Message}", obj);
             }
-            OnDataReceived?.Invoke(_model, new DataReceivedEventArgs());
+            OnDataReceived?.Invoke(this, new DataReceivedEventArgs(_model));
         }
 
         private void ProcessSystemNotification(SystemNotification system_notification)
@@ -238,63 +298,50 @@ namespace Mtconnect.MakerBotAdapter
                     ext.CurrentTemperature = extruder.current_temperature;
                     ext.TargetTemperature = extruder.target_temperature;
 
-                    ext.ToolId = extruder.tool_id.ToString();
-                    // TODO: Use the Tool_Id to potentially predict what type of material is loaded.
-                    switch (extruder.tool_id)
-                    {
-                        case 0:
-                            // No extruder present
-                            ext.ToolId = "UNAVAILABLE";
-                            break;
-                        case 8:
-                            // PLA EXTRUDER
-                            break;
-                        case 14:
-                            // TOUGH EXTRUDER
-                            break;
-                        case 99:
-                            // EXPERIMENTAL EXTRUDER
-                            break;
-                        default:
-                            _logger?.LogWarning("Unhandled toolheads.extruder[{ExtruderIndex}].tool_id received: {ToolId}", extruder.index, extruder.tool_id);
-                            break;
-                    }
+                    ext.ExtruderId = extruder.tool_id.ToString();
+                    // ext.Extruder is handled in the timer based on the ExtruderId being set above
+
                     // TODO: Track tool_present to update the Asset Changed
 
                     // Handle "Out-of-Filament"
                     if (extruder.filament_presence == null)
                     {
-                        ext.OutOfFilament = "UNAVAILABLE";
+                        ext.OutOfFilament.Unavailable();
+                        ext.FilamentType.Unavailable();
                     } else if (extruder.filament_presence == true)
                     {
                         ext.OutOfFilament = EndOfBar.PRIMARY.NO.ToString();
                     } else
                     {
                         ext.OutOfFilament = EndOfBar.PRIMARY.YES.ToString();
+                        ext.FilamentType.Unavailable();
                     }
 
                     switch (extruder.error)
                     {
                         case 54:
-                            ext.ToolError.Add(AdapterInterface.DataItems.Condition.Level.FAULT, "extruder not present", extruder.error.ToString());
+                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, "extruder not present", extruder.error.ToString());
                             break;
                         case 80:
-                            ext.ToolError.Add(AdapterInterface.DataItems.Condition.Level.WARNING, "filament not present", extruder.error.ToString());
+                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.WARNING, "filament not present", extruder.error.ToString());
                             break;
                         case 81:
-                            ext.ToolError.Add(AdapterInterface.DataItems.Condition.Level.FAULT, model.current_process?.step ?? "handling_recoverable_filament_jam", extruder.error.ToString());
+                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, model.current_process?.step ?? "handling_recoverable_filament_jam", extruder.error.ToString());
                             break;
                         case null:
                         case 0:
                             ext.ToolError.Normal();
                             break;
                         default:
-                            ext.ToolError.Add(AdapterInterface.DataItems.Condition.Level.FAULT, model.current_process?.step ?? extruder.error.ToString(), extruder.error.ToString());
+                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, model.current_process?.step ?? extruder.error.ToString(), extruder.error.ToString());
                             _logger?.LogWarning("Unhandled toolheads.extruder[{ExtruderIndex}].error received: {ErrorCode}", extruder.index, extruder.error);
                             break;
                     }
 
                 }
+            } else
+            {
+                _model.Auxiliaries.Unavailable();
             }
 
             // Update process information
@@ -308,49 +355,14 @@ namespace Mtconnect.MakerBotAdapter
             {
                 _model.Controller.Path.Program = model.current_process?.filepath
                     ?? model.current_process?.filename
-                    ?? "UNAVAILABLE";
+                    ?? AdapterSdk.Constants.UNAVAILABLE;
                 _model.Controller.Path.Username = model.current_process?.username
-                    ?? "UNAVAILABLE";
+                    ?? AdapterSdk.Constants.UNAVAILABLE;
 
                 // Keep track of reasons in the logging
                 if (model.current_process?.reason != null)
                 {
                     _logger?.LogWarning("Unhandled current_process.reason received: {@Reason}", model.current_process?.reason);
-                }
-
-                // Keep track of process ids in the logging
-                switch (model.current_process?.id)
-                {
-                    case null:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Idle");
-                        break;
-                    case 1:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Ready");
-                        break;
-                    case 4:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Print Job");
-                        break;
-                    case 5:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "LoadFilamentProcess");
-                        break;
-                    case 6:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Loading Filament (PLA)");
-                        break;
-                    case 8:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Loading Filament (Experimental Extruder)");
-                        break;
-                    case 10:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Loading Filament (Experimental Extruder)");
-                        break;
-                    case 11:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Machine Action: Go Back");
-                        break;
-                    case 12:
-                        _logger?.LogInformation("Recognizing Process Id ({ProcessId}) as {ProcessName}", model.current_process?.id, "Clear build plate");
-                        break;
-                    default:
-                        _logger?.LogWarning("Unhandled current_process.id received: {ProcessId}\r\nStep: {ProcessStep}", model.current_process?.id, model.current_process.step);
-                        break;
                 }
 
                 // Process EXECUTION
@@ -373,92 +385,16 @@ namespace Mtconnect.MakerBotAdapter
                 }
                 else
                 {
-
-                    switch (model.current_process.name)
+                    if (!string.IsNullOrEmpty(model.current_process?.step) && Enum.TryParse<PrinterStep>(model.current_process.step, out PrinterStep step))
                     {
-                        case "PrintProcess":
-                            _model.Controller.Path.Functionality = FunctionalMode.PRODUCTION;
-                            switch (model.current_process.step)
-                            {
-                                case "initializing":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    if (_model.Controller.Path.State != ProcessState.INITIALIZING)
-                                    {
-                                        _model.Controller.Path.State = ProcessState.INITIALIZING;
-                                        _model.Controller.Path.PrintStart = DateTime.UtcNow.ToString();
-                                    }
-                                    break;
-                                case "initial_heating":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    _model.Controller.Path.State = ProcessState.INITIALIZING;
-                                    break;
-                                case "final_heating":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    _model.Controller.Path.State = ProcessState.INITIALIZING;
-                                    break;
-                                case "running": // FROM PID 6,8
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    break;
-                                case "homing":
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    _model.Controller.Path.State = ProcessState.INITIALIZING;
-                                    break;
-                                case "preheating":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    _model.Controller.Path.State = ProcessState.INITIALIZING;
-                                    break;
-                                case "extrusion": // FROM PID 6,8
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    break;
-                                case "printing":
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    _model.Controller.Path.State = ProcessState.ACTIVE;
-                                    break;
-                                case "unsuspending":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    _model.Controller.Path.State = ProcessState.ACTIVE;
-                                    break;
-                                case "handling_recoverable_filament_jam":
-                                    _model.Controller.Path.Execution = Execution.WAIT;
-                                    _model.Controller.Path.State = ProcessState.INTERRUPTED;
-                                    _model.Controller.Path.Functionality = FunctionalMode.MAINTENANCE;
-                                    break;
-                                case "suspended":
-                                    _model.Controller.Path.Execution = Execution.INTERRUPTED;
-                                    _model.Controller.Path.State = ProcessState.INTERRUPTED;
-                                    _model.Controller.Path.Functionality = FunctionalMode.MAINTENANCE;
-                                    break;
-                                default:
-                                    _logger?.LogWarning("Unhandled current_process.step received in {ProcessName}: {ProcessStep}", model.current_process.name, model.current_process.step);
-                                    break;
-                            }
-                            break;
-                        case "LoadFilamentProcess":
-                            _model.Controller.Path.Execution = Execution.WAIT;
-                            _model.Controller.Path.State = ProcessState.INTERRUPTED;
-                            _model.Controller.Path.Functionality = FunctionalMode.SETUP;
-                            break;
-                        case "MachineActionProcess":
-                            switch (model.current_process.step)
-                            {
-                                case "running":
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    _model.Controller.Path.Functionality = FunctionalMode.MAINTENANCE;
-                                    break;
-                                case "cleaning_up":
-                                    _model.Controller.Path.Execution = Execution.ACTIVE;
-                                    break;
-                                case "done":
-                                    _model.Controller.Path.Execution = Execution.READY;
-                                    break;
-                                default:
-                                    _logger?.LogWarning("Unhandled current_process.step received in {ProcessName}: {ProcessStep}", model.current_process.name, model.current_process.step);
-                                    break;
-                            }
-                            break;
-                        default:
-                            _logger?.LogWarning("Unhandled current_process.name received: {ProcessName}", model.current_process.name);
-                            break;
+                        _model.Controller.Path.Execution = GetExecutionValue(step);
+                        _model.Controller.Path.State = GetProcessStateValue(step);
+                        _model.Controller.Path.Functionality = GetFunctionalModeValue(step);
+                    } else
+                    {
+                        _model.Controller.Path.Execution = Execution.READY;
+                        _model.Controller.Path.State = ProcessState.READY;
+                        _model.Controller.Path.Functionality?.Unavailable();
                     }
                 }
 
@@ -467,24 +403,171 @@ namespace Mtconnect.MakerBotAdapter
                 switch (error?.code)
                 {
                     case null:
-                        _model.Controller.Path.Alarm.Normal();
+                        _model.Controller.Path.Alarm?.Normal();
                         break;
                     default:
-                        _model.Controller.Path.Alarm.Add(AdapterInterface.DataItems.Condition.Level.FAULT, error.message, error.code);
+                        _model.Controller.Path.Alarm.Add(AdapterSdk.DataItems.Condition.Level.FAULT, error.message, error.code);
                         _logger?.LogWarning("Unhandled current_process.error received: {@Error}", error);
                         break;
                 }
             }
             else
             {
-                _model.Controller.Path.Program = "UNAVAILABLE";
-                _model.Controller.Path.PrintStart = "UNAVAILABLE";
-                _model.Controller.Path.EstimatedCompletion = "UNAVAILABLE";
-                _model.Controller.Path.PrintCompleted = "UNAVAILABLE";
+                _model.Controller.Path.Program?.Unavailable();
+                _model.Controller.Path.PrintStart?.Unavailable();
+                _model.Controller.Path.EstimatedCompletion?.Unavailable();
+                _model.Controller.Path.PrintCompleted?.Unavailable();
                 _model.Controller.Path.Execution = Execution.READY;
-                _model.Controller.Path.Functionality = "UNAVAILABLE";
-                _model.Controller.Path.State = "UNAVAILABLE";
-                _model.Controller.Path.Alarm.Normal();
+                _model.Controller.Path.Functionality?.Unavailable();
+                _model.Controller.Path.State?.Unavailable();
+                _model.Controller.Path.Alarm?.Normal();
+            }
+        }
+
+        public ExecutionValues GetExecutionValue(PrinterStep? printerStep)
+        {
+            switch (printerStep)
+            {
+                case PrinterStep.running:
+                case PrinterStep.printing:
+                    return ExecutionValues.ACTIVE;
+                case PrinterStep.initializing:
+                case PrinterStep.initial_heating:
+                case PrinterStep.final_heating:
+                case PrinterStep.cooling:
+                case PrinterStep.homing:
+                case PrinterStep.position_found:
+                case PrinterStep.preheating:
+                case PrinterStep.calibrating:
+                case PrinterStep.preheating_loading:
+                case PrinterStep.preheating_resuming:
+                case PrinterStep.preheating_unloading:
+                case PrinterStep.stopping_filament:
+                case PrinterStep.cleaning_up:
+                case PrinterStep.loading_print_tool:
+                case PrinterStep.waiting_for_file:
+                case PrinterStep.extrusion:
+                case PrinterStep.loading_filament:
+                case PrinterStep.unloading_filament:
+                case PrinterStep.transfer:
+                case PrinterStep.downloading:
+                case PrinterStep.verify_firmware:
+                case PrinterStep.writing:
+                case PrinterStep.suspending:
+                case PrinterStep.unsuspending:
+                case PrinterStep.clear_build_plate:
+                case PrinterStep.clear_filament:
+                case PrinterStep.remove_filament:
+                    return ExecutionValues.WAIT;
+                case PrinterStep.end_sequence:
+                case PrinterStep.cancelling:
+                    return ExecutionValues.PROGRAM_STOPPED;
+                case PrinterStep.suspended:
+                    return ExecutionValues.FEED_HOLD;
+                case PrinterStep.failed:
+                case PrinterStep.error_step:
+                    return ExecutionValues.INTERRUPTED;
+                case PrinterStep.completed:
+                    return ExecutionValues.PROGRAM_COMPLETED;
+                default:
+                    return ExecutionValues.READY;
+            }
+        }
+        public ProcessStateValues? GetProcessStateValue(PrinterStep? printerStep)
+        {
+            switch (printerStep)
+            {
+                case PrinterStep.running:
+                case PrinterStep.printing:
+                    return ProcessStateValues.ACTIVE;
+                case PrinterStep.initializing:
+                case PrinterStep.initial_heating:
+                case PrinterStep.final_heating:
+                case PrinterStep.homing:
+                case PrinterStep.position_found:
+                case PrinterStep.preheating:
+                case PrinterStep.waiting_for_file:
+                case PrinterStep.transfer:
+                case PrinterStep.loading_filament:
+                    return ProcessStateValues.INITIALIZING;
+                case PrinterStep.cooling:
+                case PrinterStep.calibrating:
+                case PrinterStep.preheating_loading:
+                case PrinterStep.preheating_resuming:
+                case PrinterStep.preheating_unloading:
+                case PrinterStep.stopping_filament:
+                case PrinterStep.cleaning_up:
+                case PrinterStep.loading_print_tool:
+                case PrinterStep.extrusion:
+                case PrinterStep.unsuspending:
+                case PrinterStep.clear_build_plate:
+                    return ProcessStateValues.READY;
+                case PrinterStep.clear_filament:
+                case PrinterStep.suspending:
+                case PrinterStep.unloading_filament:
+                case PrinterStep.remove_filament:
+                    return ProcessStateValues.INTERRUPTED;
+                case PrinterStep.cancelling:
+                    return ProcessStateValues.ABORTED;
+                case PrinterStep.suspended:
+                case PrinterStep.failed:
+                case PrinterStep.error_step:
+                    return ProcessStateValues.INTERRUPTED;
+                case PrinterStep.end_sequence:
+                case PrinterStep.completed:
+                    return ProcessStateValues.COMPLETE;
+                case PrinterStep.downloading:
+                case PrinterStep.writing:
+                case PrinterStep.verify_firmware:
+                default:
+                    return null;
+            }
+        }
+        public FunctionalModeValues? GetFunctionalModeValue(PrinterStep? printerStep)
+        {
+            switch (printerStep)
+            {
+                case PrinterStep.running:
+                case PrinterStep.printing:
+                case PrinterStep.unsuspending:
+                case PrinterStep.suspending:
+                    return FunctionalModeValues.PRODUCTION;
+                case PrinterStep.initializing:
+                case PrinterStep.initial_heating:
+                case PrinterStep.final_heating:
+                case PrinterStep.homing:
+                case PrinterStep.position_found:
+                case PrinterStep.preheating:
+                case PrinterStep.waiting_for_file:
+                case PrinterStep.transfer:
+                case PrinterStep.clear_build_plate:
+                case PrinterStep.loading_filament:
+                    return FunctionalModeValues.SETUP;
+                case PrinterStep.calibrating:
+                case PrinterStep.preheating_loading:
+                case PrinterStep.preheating_resuming:
+                case PrinterStep.preheating_unloading:
+                case PrinterStep.stopping_filament:
+                case PrinterStep.cleaning_up:
+                case PrinterStep.loading_print_tool:
+                case PrinterStep.extrusion:
+                case PrinterStep.clear_filament:
+                case PrinterStep.unloading_filament:
+                case PrinterStep.remove_filament:
+                    return FunctionalModeValues.MAINTENANCE;
+                case PrinterStep.cooling:
+                case PrinterStep.end_sequence:
+                case PrinterStep.completed:
+                    return FunctionalModeValues.TEARDOWN;
+                case PrinterStep.failed:
+                case PrinterStep.error_step:
+                case PrinterStep.suspended:
+                case PrinterStep.cancelling:
+                case PrinterStep.downloading:
+                case PrinterStep.writing:
+                case PrinterStep.verify_firmware:
+                default:
+                    return null;
             }
         }
 
@@ -499,6 +582,22 @@ namespace Mtconnect.MakerBotAdapter
             }
 
             OnAdapterSourceStopped?.Invoke(this, new AdapterSourceStoppedEventArgs(ex));
+        }
+
+        private string ToUuid(string input)
+        {
+            using (MD5 md5 = MD5.Create())
+            {
+                byte[] inputBytes = Encoding.UTF8.GetBytes(input);
+                byte[] hashBytes = md5.ComputeHash(inputBytes);
+
+                // Set the version (4 bits) and variant (2 bits) according to the UUID specification
+                hashBytes[7] = (byte)((hashBytes[7] & 0x0F) | 0x30); // version 3 (MD5)
+                hashBytes[8] = (byte)((hashBytes[8] & 0x3F) | 0x80); // variant 1
+
+                // Convert the hash bytes to a Guid
+                return new Guid(hashBytes).ToString();
+            }
         }
 
         public void Dispose()

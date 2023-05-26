@@ -12,26 +12,58 @@ namespace MakerBot
     {
         private readonly ILogger<Machine> _logger;
 
+        /// <summary>
+        /// Reference to the current connection to the onboard RPC service
+        /// </summary>
         public RpcConnection Connection { get; private set; }
 
+        /// <summary>
+        /// IP Address of the machine's API
+        /// </summary>
         public IPEndPoint Address => Connection.Endpoint;
 
+        /// <summary>
+        /// Reference to the configuration of this instance. Can be used to re-establish connection to this machine.
+        /// </summary>
         public MachineConfig Config { get; set; } = new MachineConfig();
 
+        /// <summary>
+        /// Reference to the machine's response for its current configuration.
+        /// </summary>
+        public MakerBot.Rpc.MachineConfig.Result MachineConfigResponse { get; set; } = null;
+
+        /// <summary>
+        /// Vendor ID.
+        /// </summary>
         public string VID { get; set; }
 
+        /// <summary>
+        /// Product ID.
+        /// </summary>
         public int PID { get; set; }
 
+        /// <summary>
+        /// Version of the RPC API.
+        /// </summary>
         public string ApiVersion { get; set; }
 
+        /// <summary>
+        /// Version of the machine's firmware.
+        /// </summary>
         public string FirmwareVersion { get; set; }
 
         public int SSL { get; set; }
 
         public string MotorDriveVersion { get; set; }
 
+        /// <summary>
+        /// MakerBot's internal id for the machine model.
+        /// </summary>
         public string BotType { get; set; }
 
+        /// <summary>
+        /// MakerBot's internal codename for the machine model.
+        /// </summary>
         public string MachineType { get; set; }
 
         public Machine(IPAddress host, int port, ILoggerFactory logFactory = default)
@@ -112,6 +144,13 @@ namespace MakerBot
             // Authenticate with the JSON-RPC service
             bool isAuthenticated = Connection.Authenticate().Result;
             if (!isAuthenticated) _logger?.LogWarning("Could not authenticate with JSON-RPC service @{Address}", Address);
+
+            // Get machine configuration
+            var machineConfig = Connection.GetMachineConfig().Result;
+            if (machineConfig != null)
+            {
+                MachineConfigResponse = machineConfig.result;
+            }
         }
 
         public void Stop()

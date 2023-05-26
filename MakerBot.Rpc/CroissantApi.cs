@@ -209,8 +209,8 @@ namespace MakerBot.Rpc
         public static async Task<double> GetAvailableZOffsetAdjustment(this RpcConnection connection)
         	=> (await connection.request("get_available_z_offset_adjustment", null))["result"].ToObject<double>();
 
-        public static async Task<MachineConfig> GetMachineConfig(this RpcConnection connection)
-        	=> (await connection.request("get_machine_config", null)).ToObject<MachineConfig>();
+        public static async Task<MakerBot.Rpc.MachineConfig> GetMachineConfig(this RpcConnection connection)
+        	=> (await connection.request("get_machine_config", null)).ToObject<MakerBot.Rpc.MachineConfig>();
 
         public static async Task<JObject> GetPersistentStatistics(this RpcConnection connection)
         	=> await connection.request("get_persistent_statistics", null);
