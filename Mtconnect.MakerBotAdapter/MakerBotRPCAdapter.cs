@@ -47,6 +47,14 @@ namespace Mtconnect.MakerBotAdapter
         private string _authCode { get; set; }
         private MakerBotMachine _model { get; set; } = new MakerBotMachine();
 
+        /// <summary>
+        /// Constructs a new instance of the MTConnect Adapter for MakerBot (Gen 5+) machine using the onboard JSON-RPC service.
+        /// </summary>
+        /// <param name="serialNumber">Reference to the machine's serial number. Used as a lookup when discovering machines via broadcast discovery.</param>
+        /// <param name="authCode">Copy of the authentication code used to connect the machine. You may need to use a separate application to obtain an Auth code.</param>
+        /// <param name="pollRate">The rate at which the adapter will poll the RPC service for more data.</param>
+        /// <param name="loggerFactory"></param>
+        /// <exception cref="IndexOutOfRangeException"></exception>
         public MakerBotRPCAdapter(string serialNumber, string authCode = null, double pollRate = 5_000, ILoggerFactory loggerFactory = default)
         {
             if (pollRate <= 0) throw new IndexOutOfRangeException("Poll rate cannot be less than or equal to zero");
