@@ -18,6 +18,9 @@ namespace Mtconnect.MakerBotAdapter
 {
     public class MakerBotRPCAdapter : IAdapterSource, IDisposable
     {
+        public const int MAX_RECONNECT_ATTEMPTS = 5;
+        private int _reconnectAttempts;
+
         private string uuid = null;
         public string DeviceUuid => uuid ?? (uuid = ToUuid(SerialNumber ?? DeviceName));
 
@@ -76,8 +79,29 @@ namespace Mtconnect.MakerBotAdapter
             {
                 _logger?.LogWarning("Machine has disconnected");
                 _model.Availability = Availability.UNAVAILABLE;
+
+                // Attempt to reconnect
+                try
+                {
+                    Machine.Connection.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to reconnect to machine");
+                    _reconnectAttempts++;
+                    if (_reconnectAttempts > MAX_RECONNECT_ATTEMPTS)
+                    {
+                        _busy = false;
+                        var maxAttemptException = new Exception("Failed too many reconnection attempts", ex);
+                        Stop(maxAttemptException);
+                        return;
+                    }
+                }
+                _busy = false;
+                return;
             } else if (!Machine.Connection.IsAuthenticated)
             {
+                // TODO: Re-Authorize, but may be unnecessary because Authorization/Authentication is handled in the start call
             }
 
             _model.Controller.Path.ToolOffset = Convert.ToInt32(Machine.Connection.GetZAdjustedOffset().Result);

@@ -22,10 +22,6 @@ namespace MakerBot
     {
         private ILogger<RpcConnection> _logger { get; set; }
 
-        public event EventHandler ConnectionChanged;
-        public event EventHandler ThreadChanged;
-        public event EventHandler Notification;
-
         /// <summary>
         /// Helps maintain the threads when (dis)connecting with the remote Socket.
         /// </summary>
