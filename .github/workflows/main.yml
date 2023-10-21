@@ -1,4 +1,4 @@
-name: Publish Mtconnect.MakerBotAdapter to NuGet
+name: Publish Mtconnect.AdapterSdk to NuGet
 
 on: 
   release:
