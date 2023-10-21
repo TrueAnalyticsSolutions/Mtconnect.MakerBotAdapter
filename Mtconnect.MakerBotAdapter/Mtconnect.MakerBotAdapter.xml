@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Mtconnect.MakerBotAdapter</name>
+    </assembly>
+    <members>
+        <member name="M:Mtconnect.MakerBotAdapter.MakerBotRPCAdapter.#ctor(System.String,System.String,System.Double,Microsoft.Extensions.Logging.ILoggerFactory)">
+            <summary>
+            Constructs a new instance of the MTConnect Adapter for MakerBot (Gen 5+) machine using the onboard JSON-RPC service.
+            </summary>
+            <param name="serialNumber">Reference to the machine's serial number. Used as a lookup when discovering machines via broadcast discovery.</param>
+            <param name="authCode">Copy of the authentication code used to connect the machine. You may need to use a separate application to obtain an Auth code.</param>
+            <param name="pollRate">The rate at which the adapter will poll the RPC service for more data.</param>
+            <param name="loggerFactory"></param>
+            <exception cref="T:System.IndexOutOfRangeException"></exception>
+        </member>
+    </members>
+</doc>

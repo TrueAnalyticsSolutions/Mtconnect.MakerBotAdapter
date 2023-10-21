@@ -2,6 +2,7 @@
 using MakerBot;
 using Microsoft.Extensions.Logging;
 using Mtconnect;
+using Mtconnect.AdapterSdk;
 using Mtconnect.AdapterSdk.Contracts;
 using Mtconnect.AdapterSdk.DeviceConfiguration;
 using Mtconnect.MakerBotAdapter;

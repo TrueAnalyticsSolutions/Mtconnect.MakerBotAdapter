@@ -2,7 +2,7 @@
 
   <PropertyGroup>
 	  <TargetFrameworks>netcoreapp3.1;netstandard2.1;net461;</TargetFrameworks>
-	  <ApplicationIcon>icon.ico</ApplicationIcon>
+	  <!--<ApplicationIcon>icon.ico</ApplicationIcon>-->
 	  <BaseOutputPath>bin\</BaseOutputPath>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
 	  <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
@@ -14,7 +14,7 @@
 	  <Description>An implementation of the MTConnect&amp;reg; Adapter Interface producing a stream of pipe-delimitted data thru TCP connections.</Description>
 	  <Copyright>True Analytics Manufacturing Solutions, LLC 2022</Copyright>
 	  <PackageProjectUrl>https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter</PackageProjectUrl>
-	  <PackageIcon>icon.jpg</PackageIcon>
+	  <!--<PackageIcon>icon.jpg</PackageIcon>-->
 	  <RepositoryUrl>https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
 	  <PackageTags>Mtconnect;Adapter;MakerBot;TAMS;</PackageTags>
@@ -36,6 +36,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MakerBot.Rpc\MakerBot.Rpc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="C:\Users\LightWorks\.nuget\packages\mtconnect.adaptersdk\3.0.0.1-beta\contentFiles\any\netcoreapp3.1\icon.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\LightWorks\.nuget\packages\mtconnect.adaptersdk\3.0.0.1-beta\contentFiles\any\netcoreapp3.1\logo_v2.0.jpg">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

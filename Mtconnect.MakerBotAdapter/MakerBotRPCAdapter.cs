@@ -1,6 +1,7 @@
 ﻿using MakerBot;
 using MakerBot.Rpc;
 using Microsoft.Extensions.Logging;
+using Mtconnect.AdapterSdk;
 using Mtconnect.AdapterSdk.DataItemValues;
 using Mtconnect.MakerBotAdapter.Lookups;
 using System;
