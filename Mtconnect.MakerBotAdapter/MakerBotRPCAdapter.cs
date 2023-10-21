@@ -75,6 +75,12 @@ namespace Mtconnect.MakerBotAdapter
         {
             if (_busy) return;
             _busy = true;
+            if (Machine == null)
+                Connect(default);
+
+            if (Machine == null)
+                return; // Wait for the machine to become available
+
             if (!Machine.Connection.IsConnected)
             {
                 _logger?.LogWarning("Machine has disconnected");
@@ -158,7 +164,15 @@ namespace Mtconnect.MakerBotAdapter
 
         public void Start(CancellationToken token = default)
         {
+            Connect(token);
 
+            _timer.Start();
+
+            OnAdapterSourceStarted?.Invoke(this, new AdapterSourceStartedEventArgs());
+        }
+
+        private void Connect(CancellationToken token)
+        {
             using (var machineFactory = new MachineFactory())
             {
                 var discoveries = machineFactory.Discover();
@@ -195,11 +209,13 @@ namespace Mtconnect.MakerBotAdapter
                         _model.Port = int.Parse(match.port);
                         _model.IPv4 = match.ip;
                         _logger?.LogDebug("Found machine through network discovery");
-                    } else
+                    }
+                    else
                     {
                         _logger?.LogWarning("Couldn't discover machine in broadcast");
                     }
-                } else
+                }
+                else
                 {
                     _logger?.LogWarning("No machines discovered on the network");
                 }
@@ -218,15 +234,11 @@ namespace Mtconnect.MakerBotAdapter
             if (sysInfo != null)
             {
                 _logger?.LogDebug("Received SystemInformation: {@SysInfo}", sysInfo);
-            } else
+            }
+            else
             {
                 _logger?.LogDebug("Could not retrieve SystemInformation");
             }
-
-
-            _timer.Start();
-
-            OnAdapterSourceStarted?.Invoke(this, new AdapterSourceStartedEventArgs());
         }
 
         private void Connection_OnResponse(Newtonsoft.Json.Linq.JObject obj)

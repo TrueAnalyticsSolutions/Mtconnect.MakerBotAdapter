@@ -1,13 +1,37 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	  <TargetFrameworks>netcoreapp3.1;netstandard2.1;net461;</TargetFrameworks>
+	  <ApplicationIcon>icon.ico</ApplicationIcon>
+	  <BaseOutputPath>bin\</BaseOutputPath>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	  <AssemblyName>Mtconnect.MakerBotAdapter</AssemblyName>
+	  <RootNamespace>Mtconnect.MakerBotAdapter</RootNamespace>
+	  <Title>MTConnect MakerBotAdapter Adapter Source</Title>
+	  <Authors>tbm0115</Authors>
+	  <Company>True Analytics Manufacturing Solutions</Company>
+	  <Description>An implementation of the MTConnect&amp;reg; Adapter Interface producing a stream of pipe-delimitted data thru TCP connections.</Description>
+	  <Copyright>True Analytics Manufacturing Solutions, LLC 2022</Copyright>
+	  <PackageProjectUrl>https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter</PackageProjectUrl>
+	  <PackageIcon>icon.jpg</PackageIcon>
+	  <RepositoryUrl>https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter</RepositoryUrl>
+	  <RepositoryType>git</RepositoryType>
+	  <PackageTags>Mtconnect;Adapter;MakerBot;TAMS;</PackageTags>
+	  <PackageReleaseNotes>Updated to latest AdapterSDK. Support for reference Agent SHDR commands.</PackageReleaseNotes>
+	  <Version>3.0.1.1-beta</Version>
+	  <IncludeSymbols>True</IncludeSymbols>
+	  <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	  <DebugSymbols>true</DebugSymbols>
+	  <EmbedAllSources>true</EmbedAllSources>
+	  <DebugType>portable</DebugType>
+	  <DocumentationFile>$(AssemblyName).xml</DocumentationFile>
+	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	  <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mtconnect.AdapterSdk" Version="2.0.2" />
+    <PackageReference Include="Mtconnect.AdapterSdk" Version="3.0.0.1-beta" />
   </ItemGroup>
 
   <ItemGroup>

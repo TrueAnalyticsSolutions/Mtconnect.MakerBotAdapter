@@ -2,6 +2,7 @@
 using MakerBot;
 using Microsoft.Extensions.Logging;
 using Mtconnect;
+using Mtconnect.AdapterSdk.Contracts;
 using Mtconnect.AdapterSdk.DeviceConfiguration;
 using Mtconnect.MakerBotAdapter;
 using Newtonsoft.Json;
@@ -126,11 +127,11 @@ internal class Program
         doc.Save(filename);
     }
 
-    private static void Adapter_OnStarted(Adapter sender, object e)
+    private static void Adapter_OnStarted(IAdapter sender, object e)
     {
     }
 
-    private static void Adapter_OnStopped(Adapter sender, AdapterStoppedEventArgs e)
+    private static void Adapter_OnStopped(IAdapter sender, AdapterStoppedEventArgs e)
     {
     }
 }
