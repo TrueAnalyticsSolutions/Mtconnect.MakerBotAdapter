@@ -1,7 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	  <TargetFrameworks>netcoreapp3.1;netstandard2.1;net461;</TargetFrameworks>
+	  <TargetFramework>netstandard2.0</TargetFramework>
 	  <!--<ApplicationIcon>icon.ico</ApplicationIcon>-->
 	  <BaseOutputPath>bin\</BaseOutputPath>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
@@ -19,24 +19,22 @@
 	  <RepositoryType>git</RepositoryType>
 	  <PackageTags>Mtconnect;Adapter;MakerBot;TAMS;</PackageTags>
 	  <PackageReleaseNotes>Updated to latest AdapterSDK. Support for reference Agent SHDR commands.</PackageReleaseNotes>
-	  <Version>3.0.1.5-beta</Version>
+	  <Version>3.0.1.7-beta</Version>
 	  <IncludeSymbols>True</IncludeSymbols>
 	  <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 	  <DebugSymbols>true</DebugSymbols>
 	  <EmbedAllSources>true</EmbedAllSources>
 	  <DebugType>portable</DebugType>
 	  <DocumentationFile>$(AssemblyName).xml</DocumentationFile>
-	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	  <!--<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>-->
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mtconnect.AdapterSdk" Version="3.0.0.1-beta" />
+    <PackageReference Include="Mtconnect.AdapterSdk.Core" Version="1.0.0.9-alpha" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MakerBot.Rpc\MakerBot.Rpc.csproj">
-      <Private>True</Private>
-    </ProjectReference>
+    <ProjectReference Include="..\MakerBot.Rpc\MakerBot.Rpc.csproj" />
   </ItemGroup>
 
   <ItemGroup>

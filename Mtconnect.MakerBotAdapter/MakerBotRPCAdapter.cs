@@ -7,8 +7,6 @@ using Mtconnect.MakerBotAdapter.Lookups;
 using System;
 using System.Linq;
 using System.Net;
-using System.Reflection;
-using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;

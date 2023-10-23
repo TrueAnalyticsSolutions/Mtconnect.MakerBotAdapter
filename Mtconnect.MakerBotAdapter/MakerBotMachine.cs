@@ -1,7 +1,8 @@
-﻿using Mtconnect.AdapterSdk.Contracts.Attributes;
+﻿using Mtconnect.AdapterSdk;
+using Mtconnect.AdapterSdk.Attributes;
 using Mtconnect.AdapterSdk.DataItems;
-using MtcTypes = Mtconnect.AdapterSdk.DataItemTypes;
 using Mtconnect.AdapterSdk.DataItemValues;
+using MtcTypes = Mtconnect.AdapterSdk.DataItemTypes;
 
 namespace Mtconnect.MakerBotAdapter
 {
