@@ -115,7 +115,7 @@ namespace Mtconnect.MakerBotAdapter
             var machineConfig = Machine.MachineConfigResponse;
             if (machineConfig != null)
             {
-                string modelId = _model.Auxiliaries?.ModelExtruder?.ExtruderId?.ToString();
+                string modelId = _model.Auxiliaries?.GetOrAddExtruder("mdl")?.ExtruderId?.ToString();
                 if (!string.IsNullOrEmpty(modelId))
                 {
                     string modelType = Machine.MachineConfigResponse?.extruder_profiles?.supported_extruders?[modelId]?.ToString();
@@ -124,18 +124,18 @@ namespace Mtconnect.MakerBotAdapter
                         string modelName = Extruders.GetNameByType(modelType);
                         if (!string.IsNullOrEmpty(modelName))
                         {
-                            _model.Auxiliaries.ModelExtruder.Extruder = modelName;
+                            _model.Auxiliaries.GetOrAddExtruder("mdl").Extruder = modelName;
                         }
 
                         var materialType = machineConfig.extruder_profiles.extruder_profiles[modelType]?.materials?.FirstOrDefault().Key;
                         if (!string.IsNullOrEmpty(materialType))
                         {
-                            _model.Auxiliaries.ModelExtruder.FilamentType = Materials.GetNameByType(materialType);
+                            _model.Auxiliaries.GetOrAddExtruder("mdl").FilamentType = Materials.GetNameByType(materialType);
                         }
                     }
                 }
 
-                string supportId = _model.Auxiliaries?.SupportExtruder?.ExtruderId?.ToString();
+                string supportId = _model.Auxiliaries?.GetOrAddExtruder("spt")?.ExtruderId?.ToString();
                 if (!string.IsNullOrEmpty(supportId))
                 {
                     string supportType = Machine.MachineConfigResponse?.extruder_profiles?.supported_extruders?[supportId]?.ToString();
@@ -144,13 +144,13 @@ namespace Mtconnect.MakerBotAdapter
                         string supportName = Extruders.GetNameByType(supportType);
                         if (!string.IsNullOrEmpty(supportName))
                         {
-                            _model.Auxiliaries.SupportExtruder.Extruder = supportName;
+                            _model.Auxiliaries.GetOrAddExtruder("spt").Extruder = supportName;
                         }
 
                         var materialType = machineConfig.extruder_profiles.extruder_profiles[supportType]?.materials?.FirstOrDefault().Key;
                         if (!string.IsNullOrEmpty(materialType))
                         {
-                            _model.Auxiliaries.SupportExtruder.FilamentType = Materials.GetNameByType(materialType);
+                            _model.Auxiliaries.GetOrAddExtruder("spt").FilamentType = Materials.GetNameByType(materialType);
                         }
                     }
                 }
@@ -332,11 +332,11 @@ namespace Mtconnect.MakerBotAdapter
                     ToolHead ext = null;
                     if (extruder.index == 0)
                     {
-                        ext = _model.Auxiliaries.ModelExtruder;
+                        ext = _model.Auxiliaries.GetOrAddExtruder("mdl");
                     }
                     else if (extruder.index == 1)
                     {
-                        ext = _model.Auxiliaries.SupportExtruder;
+                        ext = _model.Auxiliaries.GetOrAddExtruder("spt");
                     }
                     ext.CurrentTemperature = extruder.current_temperature;
                     ext.TargetTemperature = extruder.target_temperature;

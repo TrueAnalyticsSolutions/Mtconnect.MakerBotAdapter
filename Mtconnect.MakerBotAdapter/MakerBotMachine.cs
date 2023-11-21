@@ -2,45 +2,52 @@
 using Mtconnect.AdapterSdk.Attributes;
 using Mtconnect.AdapterSdk.DataItems;
 using Mtconnect.AdapterSdk.DataItemValues;
+using System.Collections.Generic;
+using System.Linq;
 using MtcTypes = Mtconnect.AdapterSdk.DataItemTypes;
 
 namespace Mtconnect.MakerBotAdapter
 {
     public class MachineAuxiliaries : MtcTypes.Auxiliaries
     {
-        [DataItemPartial("mdl", "Regarding the primary, (typically) model printing extruder; ")]
-        public ToolHead ModelExtruder => GetOrAddAuxiliary<ToolHead>(nameof(ModelExtruder));
+        [DataItemPartial("", "Extruder")]
+        public Dictionary<string, ToolHead> Extruders { get; set; } = new Dictionary<string, ToolHead>();
+        //[DataItemPartial("mdl", "Regarding the primary, (typically) model printing extruder; ")]
+        //public ToolHead ModelExtruder => GetOrAddAuxiliary<ToolHead>(nameof(ModelExtruder));
 
-        [DataItemPartial("spt", "Regarding the secondary, (typically) support printing extruder; ")]
-        public ToolHead SupportExtruder => GetOrAddAuxiliary<ToolHead>(nameof(SupportExtruder));
+        //[DataItemPartial("spt", "Regarding the secondary, (typically) support printing extruder; ")]
+        //public ToolHead SupportExtruder => GetOrAddAuxiliary<ToolHead>(nameof(SupportExtruder));
+
+        public ToolHead GetOrAddExtruder(string name)
+        {
+            var ext = GetOrAddAuxiliary<ToolHead>(name);
+            if (!Extruders.ContainsKey(name))
+                Extruders.Add(name, ext);
+            return ext;
+        }
 
         public override void Unavailable()
         {
             base.Unavailable();
 
-            ModelExtruder?.Unavailable();
-            SupportExtruder?.Unavailable();
+            if (Extruders?.Any() == true)
+                foreach (var item in Extruders)
+                    item.Value.Unavailable();
         }
     }
 
     public class MachineAxes : MtcTypes.Axes
     {
-        [DataItemPartial("x")]
-        public MachineLinearAxis X => GetOrAddAxis<MachineLinearAxis>(nameof(X));
-
-        [DataItemPartial("y")]
-        public MachineLinearAxis Y => GetOrAddAxis<MachineLinearAxis>(nameof(Y));
-
-        [DataItemPartial("z")]
-        public MachineLinearAxis Z => GetOrAddAxis<MachineLinearAxis>(nameof(Z));
+        [DataItemPartial("l_")]
+        public Dictionary<string, MachineLinearAxis> LinearAxes { get; set; } = new Dictionary<string, MachineLinearAxis>();
 
         public override void Unavailable()
         {
             base.Unavailable();
 
-            X?.Unavailable();
-            Y?.Unavailable();
-            Z?.Unavailable();
+            if (LinearAxes?.Any() == true)
+                foreach (var item in LinearAxes)
+                    item.Value.Unavailable();
         }
     }
     public class MachineController : MtcTypes.Controller

@@ -3,7 +3,6 @@ using MakerBot;
 using Microsoft.Extensions.Logging;
 using Mtconnect;
 using Mtconnect.AdapterSdk;
-using Mtconnect.AdapterSdk.Contracts;
 using Mtconnect.AdapterSdk.DeviceConfiguration;
 using Mtconnect.MakerBotAdapter;
 using Newtonsoft.Json;
@@ -13,7 +12,36 @@ internal class Program
 {
     private const string PUTTY_EXE = "C:\\Program Files\\PuTTY\\putty.exe";
     private const string CMD_EXE = "C:\\windows\\system32\\cmd.exe";
+    private class AdapterLogger : IAdapterLogger
+    {
+        private readonly ILogger _logger;
 
+        public AdapterLogger(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public void LogDebug(string message, params object[] args)
+            => _logger?.LogDebug(message, args);
+
+        public void LogError(string message, params object[] args)
+            => _logger?.LogError(message, args);
+
+        public void LogError(Exception exception, string message, params object[] args)
+            => _logger?.LogError(exception, message, args);
+
+        public void LogInformation(string message, params object[] args)
+            => _logger?.LogInformation(message, args);
+
+        public void LogTrace(string message, params object[] args)
+            => _logger?.LogTrace(message, args);
+
+        public void LogWarning(string message, params object[] args)
+            => _logger?.LogWarning(message, args);
+
+        public void LogWarning(Exception exception, string message, params object[] args)
+            => _logger?.LogWarning(exception, message, args);
+    }
     private static void Main(string[] args)
     {
         var loggerFactory = LoggerFactory.Create((o) =>
@@ -72,7 +100,7 @@ internal class Program
             var options = new TcpAdapterOptions();
             options.UpdateFromConfig();
 
-            var adapter = new TcpAdapter(options, loggerFactory);
+            var adapter = new TcpAdapter(options, new AdapterLogger(loggerFactory.CreateLogger<MakerBotRPCAdapter>()));
             adapter.OnStarted += Adapter_OnStarted;
             adapter.OnStopped += Adapter_OnStopped;
             var modelSources = new List<MakerBotRPCAdapter>();

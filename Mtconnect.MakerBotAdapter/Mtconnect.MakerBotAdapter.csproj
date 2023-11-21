@@ -26,11 +26,19 @@
 	  <EmbedAllSources>true</EmbedAllSources>
 	  <DebugType>portable</DebugType>
 	  <DocumentationFile>$(AssemblyName).xml</DocumentationFile>
-	  <!--<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>-->
+	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mtconnect.AdapterSdk.Core" Version="1.0.0.9-alpha" />
+    <None Remove="Mtconnect.MakerBotAdapter.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Mtconnect.MakerBotAdapter.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mtconnect.AdapterSdk.Core" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
