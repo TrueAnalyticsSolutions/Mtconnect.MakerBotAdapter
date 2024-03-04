@@ -10,7 +10,7 @@ namespace Mtconnect.MakerBotAdapter
 {
     public class MachineAuxiliaries : MtcTypes.Auxiliaries
     {
-        [DataItemPartial("", "Extruder")]
+        [DataItemPartial("e", "Extruder")]
         public Dictionary<string, ToolHead> Extruders { get; set; } = new Dictionary<string, ToolHead>();
         //[DataItemPartial("mdl", "Regarding the primary, (typically) model printing extruder; ")]
         //public ToolHead ModelExtruder => GetOrAddAuxiliary<ToolHead>(nameof(ModelExtruder));
@@ -120,10 +120,10 @@ namespace Mtconnect.MakerBotAdapter
     public class MachineLinearAxis : MtcTypes.Linear
     {
         [Sample("pos")]
-        public PathPosition.ACTUAL ActualPosition { get; set; } = null;
+        public PathPosition.ACTUAL ActualPosition { get; set; }
 
         [Sample("cmd")]
-        public PathPosition.COMMANDED CommandedPosition { get; set; } = null;
+        public PathPosition.COMMANDED CommandedPosition { get; set; }
 
         public override void Unavailable()
         {
@@ -136,16 +136,16 @@ namespace Mtconnect.MakerBotAdapter
     public class ToolHead : MtcTypes.Heating
     {
         [Sample("ttemp", "Target temperature for the extruder, in Celsius", Units = "CELSIUS")]
-        public Temperature TargetTemperature { get; set; } = null;
+        public Temperature TargetTemperature { get; set; }
 
         [Sample("ctemp", "Actual temperature for the extruder, in Celsius", Units = "CELSIUS")]
-        public Temperature CurrentTemperature { get; set; } = null;
+        public Temperature CurrentTemperature { get; set; }
 
         [Event("tid", "MakerBot's internal id for the type of extruder installed in the machine")]
-        public ToolAssetId ExtruderId { get; set; } = null;
+        public ToolAssetId ExtruderId { get; set; }
 
         [Event("tname", "Model number of the recognized extruder id. Returns UNAVAILABLE when the adapter is unable to recognize the " + nameof(ExtruderId) + ".")]
-        public ToolAssetId Extruder { get; set; } = null;
+        public ToolAssetId Extruder { get; set; }
 
         [Condition("te", Type = nameof(MtcTypes.ConditionTypes.SYSTEM))]
         public Condition ToolError { get; set; } = new Condition("ToolError");
