@@ -2,14 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Consoul" Version="1.6.3" />
-    <PackageReference Include="Mtconnect.TcpAdapter" Version="3.0.2.4" />
+    <PackageReference Include="Consoul" Version="1.6.6" />
+    <PackageReference Include="Mtconnect.TcpAdapter" Version="3.0.2.8" />
   </ItemGroup>
 
   <ItemGroup>

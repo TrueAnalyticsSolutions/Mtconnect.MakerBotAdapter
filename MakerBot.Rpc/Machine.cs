@@ -73,7 +73,7 @@ namespace MakerBot
             Config.Address = host.ToString();
             Config.Port = port;
 
-            Connection = new RpcConnection(host, port, logFactory);
+            Connection = new RpcConnection(host.ToString(), port, logFactory);
         }
 
         public Machine(Broadcast broadcastResponse, ILoggerFactory logFactory = default) : this(IPAddress.Parse(broadcastResponse.ip), int.Parse(broadcastResponse.port), logFactory)
@@ -86,10 +86,10 @@ namespace MakerBot
         public void Start(CancellationToken cancellationToken = default)
         {
             _logger?.LogInformation("Starting machine connection @{Address}...", Address);
-            Connection?.Start(cancellationToken);
+            Connection?.ConnectAsync(Config.RpcToken, ct: cancellationToken);
             _logger?.LogInformation("Started machine connection @{Address}", Address);
 
-            if (!Connection.IsAuthenticated)
+            if (!Connection.IsConnected)
             {
                 _logger?.LogWarning("RPC connection is not authenticated...");
                 if (string.IsNullOrEmpty(Config.AuthenticationCode))

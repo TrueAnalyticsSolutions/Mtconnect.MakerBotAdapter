@@ -10,7 +10,7 @@ namespace MakerBot.Rpc
     {
         private static async Task<JObject> request(this RpcConnection connection, string method, object body = null, CancellationToken cancellationToken = default)
         {
-            JObject response = await connection.SendCommand(new RpcRequest(method, body), cancellationToken);
+            JObject response = await connection.SendAsync(method, body, ct: cancellationToken);// new RpcRequest(method, body), cancellationToken);
             if (response == null)
             {
                 throw new Exception("Invalid RPC response");
@@ -694,15 +694,15 @@ namespace MakerBot.Rpc
             });
             
 
-        [Obsolete("Method not supported")]
-        public static async Task<string> GetRawCameraImageData(this RpcConnection connection)
-        {
-            string obj = await FastCGI.Send(connection.Endpoint.Address, "camera", new
-            {
-                token = connection.AccessTokens[FastCGI.AccessTokenContexts.camera]
-            });
-            return obj;
-        }
+        //[Obsolete("Method not supported")]
+        //public static async Task<string> GetRawCameraImageData(this RpcConnection connection)
+        //{
+        //    string obj = await FastCGI.Send(connection.Endpoint.Address, "camera", new
+        //    {
+        //        token = connection.AccessTokens[FastCGI.AccessTokenContexts.camera]
+        //    });
+        //    return obj;
+        //}
             
     }
 }

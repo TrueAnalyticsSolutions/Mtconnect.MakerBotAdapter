@@ -4,107 +4,123 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MakerBot
 {
-    public class MachineFactory : IDisposable
+    /// <summary>
+    /// Discovers MakerBot machines via UDP broadcast.
+    /// Sends {"command":"broadcast"} to port 12307 and listens on the sender's source port (12309).
+    /// Broadcasts to global and per-NIC subnet-directed broadcasts to handle multi-NIC setups.
+    /// </summary>
+    public sealed class MachineFactory : IDisposable
     {
         private readonly ILogger<MachineFactory> _logger;
+        private readonly Socket _udp;
+        private const int TargetPort = 12307;  // printer listens here
+        private const int ReplyPort = 12309;  // we send FROM and receive ON this port
 
-        private Dictionary<string, Machine> _machines { get; set; } = new Dictionary<string, Machine>();
-
-        private Socket BroadcastChannel { get; set; } = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        private Socket AnswerChannel { get; set; } = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
-        const int _targetPort = 12307;
-        const int _listenPort = 12308;
-        const int _sourcePort = 12309;
-
+        /// <summary>
+        /// Initializes the discovery socket and binds to 0.0.0.0:12309.
+        /// </summary>
         public MachineFactory(ILoggerFactory logFactory = default)
         {
             _logger = logFactory?.CreateLogger<MachineFactory>();
 
-            BroadcastChannel.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
-            BroadcastChannel.Bind(new IPEndPoint(IPAddress.Any, _sourcePort) as EndPoint);
+            _udp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            _udp.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            _udp.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+            _udp.Blocking = false;
+            _udp.Bind(new IPEndPoint(IPAddress.Any, ReplyPort));
 
-            AnswerChannel.Blocking = false;
-            AnswerChannel.Bind(new IPEndPoint(IPAddress.Any, _listenPort));
+            _logger?.LogDebug("Discovery socket bound to {Local}", _udp.LocalEndPoint);
         }
 
-        public Broadcast[] Discover()
+        /// <summary>
+        /// Broadcasts a discovery request and gathers replies for a few seconds.
+        /// </summary>
+        public Broadcast[] Discover(int seconds = 6)
         {
-            var broadcastResponses = new List<Broadcast>();
+            var replies = new List<Broadcast>();
+            var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new JObject { ["command"] = "broadcast" }));
 
-            _logger?.LogInformation("Publishing broadcast command");
-            broadcast();
-
-            _logger?.LogInformation("Awaiting broadcast command responses...");
-            int maxAttempts = 5;
-            int idx = 0;
-            byte[] buffer = new byte[1024];
-            EndPoint remoteEndpoint = new IPEndPoint(IPAddress.Any, 0);
-            do
+            // Build destination list: global broadcast + each NIC's broadcast
+            var destinations = new HashSet<IPEndPoint> { new IPEndPoint(IPAddress.Broadcast, TargetPort) };
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
             {
-                System.Threading.Thread.Sleep(1000); // Sleep 1 second
-                try
+                if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                foreach (var ua in nic.GetIPProperties().UnicastAddresses)
                 {
-                    if (!AnswerChannel.Blocking && AnswerChannel.Available > 0)
-                    {
-                        int length = this.AnswerChannel.ReceiveFrom(buffer, ref remoteEndpoint);
-                        if (length > 0)
-                        {
-                            string resp = Encoding.UTF8.GetString(buffer).Trim((char)0x00);
-                            var objResponse = JsonConvert.DeserializeObject<Broadcast>(resp);
-
-                            _logger?.LogTrace("Discovery response: {Response}", resp);
-                            broadcastResponses.Add(objResponse);
-                        }
-                    }
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork || ua.IPv4Mask == null) continue;
+                    var bc = ComputeBroadcast(ua.Address, ua.IPv4Mask);
+                    if (bc != null) destinations.Add(new IPEndPoint(bc, TargetPort));
                 }
-                catch (SocketException se)
-                {
-                    _logger?.LogWarning("Encountered SocketException while attempting to discover machines. Retry attempt {Attempt}/{MaxAttempts}", idx+1, maxAttempts);
-                    if (idx == maxAttempts - 1) _logger?.LogError(se, "Failed to discover machines due to SocketException");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to discover machines due to Exception");
-                }
-                idx++;
-            } while (idx < maxAttempts);
-            if (idx >= maxAttempts)
-            {
-                //write("\tTimed Out!", ConsoleColor.Red);
             }
 
-            return broadcastResponses.ToArray();
+            foreach (var ep in destinations)
+            {
+                try { _udp.SendTo(payload, ep); _logger?.LogDebug("Broadcast → {Dest}", ep); }
+                catch (SocketException se) { _logger?.LogDebug(se, "Broadcast failed → {Dest}", ep); }
+            }
+
+            var buf = new byte[4096];
+            var remote = (EndPoint)new IPEndPoint(IPAddress.Any, 0);
+            var deadline = DateTime.UtcNow.AddSeconds(Math.Max(2, seconds));
+
+            while (DateTime.UtcNow < deadline)
+            {
+                // small poll loop without busy spin
+                System.Threading.Thread.Sleep(100);
+                try
+                {
+                    while (_udp.Available > 0)
+                    {
+                        int len = _udp.ReceiveFrom(buf, ref remote);
+                        if (len <= 0) continue;
+                        var json = Encoding.UTF8.GetString(buf, 0, len);
+
+                        _logger?.LogTrace("Discovery ← {Remote}: {Json}", remote, json);
+                        try
+                        {
+                            var obj = JsonConvert.DeserializeObject<Broadcast>(json);
+                            if (obj != null) replies.Add(obj);
+                        }
+                        catch { /* ignore non-JSON */ }
+                    }
+                }
+                catch (SocketException se) { _logger?.LogDebug(se, "Receive error on {Local}", _udp.LocalEndPoint); }
+            }
+
+            if (replies.Count == 0)
+            {
+                _logger?.LogWarning("No discovery responses on {Port}. Disable VPN/Tailscale and ensure the printer shares a subnet with one NIC.", ReplyPort);
+            }
+
+            return replies.ToArray();
         }
 
-        private void broadcast(int timeoutMilliseconds = 30_000)
+        /// <summary>
+        /// Computes a directed broadcast address given an IPv4 address and mask.
+        /// </summary>
+        private static IPAddress ComputeBroadcast(IPAddress address, IPAddress mask)
         {
-            if (timeoutMilliseconds <= 0) throw new ArgumentException(nameof(timeoutMilliseconds), "Timeout must be greater than zero");
-
-            JObject broadcast = new JObject();
-            broadcast["command"] = "broadcast";
-
-            byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(broadcast));
-            var endpoint = new IPEndPoint(IPAddress.Broadcast, _targetPort);
-            _logger?.LogDebug("Broadcasting to endpoint: {Endpoint}", endpoint.ToString());
-            BroadcastChannel.SendTo(payload, endpoint);
-            return;
+            var a = address.GetAddressBytes();
+            var m = mask.GetAddressBytes();
+            if (a.Length != m.Length) return null;
+            var b = new byte[a.Length];
+            for (int i = 0; i < a.Length; i++) b[i] = (byte)(a[i] | ~m[i]);
+            return new IPAddress(b);
         }
 
+        /// <summary>
+        /// Disposes the discovery socket.
+        /// </summary>
         public void Dispose()
         {
-            _machines.Clear();
-            BroadcastChannel?.Dispose();
-            AnswerChannel?.Dispose();
+            try { _udp?.Close(); _udp?.Dispose(); } catch { }
         }
     }
 }

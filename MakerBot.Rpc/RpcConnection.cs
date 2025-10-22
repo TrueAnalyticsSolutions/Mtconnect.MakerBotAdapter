@@ -1,334 +1,183 @@
-﻿using MakerBot.Rpc;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.IO;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static MakerBot.FastCGI;
 
 namespace MakerBot
 {
     /// <summary>
-    /// Maintains a Socket connection to a Machine and handles communication via the JSON-RPC protocol.
+    /// Maintains a TCP JSON-RPC 2.0 connection to a MakerBot and provides async request/response APIs.
+    /// Messages are newline-delimited JSON (one object per line).
     /// </summary>
-    public class RpcConnection : IDisposable
+    public sealed class RpcConnection : IDisposable
     {
-        private ILogger<RpcConnection> _logger { get; set; }
+        private readonly ILogger<RpcConnection> _logger;
+        private readonly string _host;
+        private readonly int _port;
+
+        private TcpClient _tcp;
+        private NetworkStream _net;
+        private StreamReader _reader;
+        private StreamWriter _writer;
+        private CancellationTokenSource _pumpCts;
+
+        private int _nextId = 0;
+        private readonly ConcurrentDictionary<int, TaskCompletionSource<JObject>> _pending = new ConcurrentDictionary<int, TaskCompletionSource<JObject>>();
 
         /// <summary>
-        /// Helps maintain the threads when (dis)connecting with the remote Socket.
+        /// Fired for notifications (messages with "method" and no "id").
         /// </summary>
-        private ManualResetEvent asyncTaskSwitch = new ManualResetEvent(false);
+        public event Action<JObject> OnNotification;
 
         /// <summary>
-        /// Reference to the machine's local area address.
+        /// Indicates if the underlying TCP socket is connected.
         /// </summary>
-        public IPEndPoint Endpoint { get; private set; }
+        public bool IsConnected => _tcp?.Connected == true;
 
         /// <summary>
-        /// Socket connection to the machine.
+        /// Creates a new RPC connection wrapper.
         /// </summary>
-        private Socket connection { get; set; } = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
-        /// <summary>
-        /// Network stream to help manage Read/Write operations.
-        /// </summary>
-        private NetworkStream stream { get; set; }
-        /// <summary>
-        /// Reads inbound messages from the machine's Socket connection.
-        /// </summary>
-        private StreamReader reader { get; set; }
-        /// <summary>
-        /// Writes outbound messages to the machine's Socket connection.
-        /// </summary>
-        private StreamWriter writer { get; set; }
-
-        /// <summary>
-        /// Collection of pending unhandled command callbacks.
-        /// </summary>
-        /// <remarks>The key is a reference to the <see cref="requestId"/> that was used to issue the command and the value is the response from the machine.</remarks>
-        private Dictionary<int, JObject> callbacks = new Dictionary<int, JObject>();
-
-        public Dictionary<AccessTokenContexts, string> AccessTokens { get; private set; } = new Dictionary<AccessTokenContexts, string>()
+        public RpcConnection(string host, int port = 9999, ILoggerFactory logFactory = default)
         {
-            { AccessTokenContexts.jsonrpc, string.Empty },
-            { AccessTokenContexts.put, string.Empty },
-            { AccessTokenContexts.camera, string.Empty }
-        };
-
-        /// <summary>
-        /// Triggered when the network stream finishes parsing a JSON-RPC response from the machine.
-        /// </summary>
-        public event Action<JObject> OnResponse;
-
-        private int requestId { get; set; }
-
-        private bool IsDisconnectRequested { get; set; } = false;
-
-        public bool IsAuthenticated { get; set; }
-
-        public bool IsConnected
-        {
-            get
-            {
-                return connection?.Connected == true;
-            }
-        }
-
-        public RpcConnection(IPEndPoint endpoint, ILoggerFactory logFactory = default)
-        {
-            Endpoint = endpoint;
+            _host = host;
+            _port = port;
             _logger = logFactory?.CreateLogger<RpcConnection>();
         }
-        public RpcConnection(IPAddress address, int port, ILoggerFactory logFactory = default) : this(new IPEndPoint(address, port), logFactory) { }
-        public RpcConnection(string host, int port, ILoggerFactory logFactory = default) : this(IPAddress.Parse(host), port, logFactory) { }
 
-        public async Task<bool> Authenticate()
-        {
-            if (!AccessTokens.ContainsKey(AccessTokenContexts.jsonrpc) || string.IsNullOrEmpty(AccessTokens[AccessTokenContexts.jsonrpc]))
-            {
-                throw new Exception("You must first get an access token before authenticating.");
-            }
-
-            return await Authenticate(AccessTokens[AccessTokenContexts.jsonrpc]);
-        }
         /// <summary>
-        /// Authenticates this client with the RPC service using the Access Token provided by <see cref="FastCGI"/>.
+        /// Opens the TCP connection and starts the receive loop.
+        /// Optionally sends an authenticate call if a token is provided.
         /// </summary>
-        /// <param name="accessToken">Reference to the access token provided by the <see cref="FastCGI"/> API.</param>
-        /// <returns></returns>
-        public async Task<bool> Authenticate(string accessToken)
+        public async Task ConnectAsync(string accessToken = null, CancellationToken ct = default)
         {
-            var result = await SendCommand(new RpcRequest("authenticate", new { access_token = accessToken }));
-            IsAuthenticated = result != null && !result.ContainsKey("error");
-            return IsAuthenticated;
-        }
+            _tcp = new TcpClient();
+            await _tcp.ConnectAsync(_host, _port);
+            _net = _tcp.GetStream();
+            _reader = new StreamReader(_net, Encoding.UTF8);
+            _writer = new StreamWriter(_net, Encoding.UTF8) { AutoFlush = true };
 
-        public void Start(CancellationToken cancellationToken = default)
-        {
-            if (connection?.Connected == true) return;
+            _pumpCts = new CancellationTokenSource();
+            _ = Task.Run(() => ReceivePumpAsync(_pumpCts.Token));
 
-            _logger?.LogInformation("Connecting to {Address}...", Endpoint);
-            connection.BeginConnect(Endpoint, new AsyncCallback(connectCallback), connection);
-            asyncTaskSwitch.WaitOne();
-            asyncTaskSwitch.Reset();
+            _logger?.LogInformation("Connected to MakerBot RPC {Host}:{Port}", _host, _port);
 
-            stream = new NetworkStream(connection);
-            reader = new StreamReader(stream);
-            writer = new StreamWriter(stream) { AutoFlush = true };
-
-            _logger?.LogInformation("Starting JSON-RPC Listener @{Address}", Endpoint);
-            Task.Run(readResponseAsync);
-        }
-
-        private void connectCallback(IAsyncResult result)
-        {
-            try
+            if (!string.IsNullOrEmpty(accessToken))
             {
-                connection.EndConnect(result);
-
-                asyncTaskSwitch.Set();
-                _logger?.LogInformation("Connected to {Address}...", Endpoint);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to connect to {Address}", Endpoint);
-                throw ex;
+                var auth = await SendAsync("authenticate", new { access_token = accessToken }, timeoutMs: 5000, ct);
+                if (auth?["error"] != null)
+                    throw new UnauthorizedAccessException(auth["error"]?.ToString());
             }
         }
 
-        private async Task readResponseAsync()
+        /// <summary>
+        /// Sends a JSON-RPC request and awaits the response (with timeout).
+        /// </summary>
+        public async Task<JObject> SendAsync(string method, object @params = null, int timeoutMs = 5000, CancellationToken ct = default)
         {
-            const char NULL = '\u0000';
-            const char STX = '{';
-            const char ETX = '}';
-
-            const int bufferSize = 1024;
-
-            byte[] buffer = new byte[bufferSize];
-            int tokenStack = 0;
-            StringBuilder responseBuilder = new StringBuilder();
-            try
+            var id = Interlocked.Increment(ref _nextId);
+            var req = new JObject
             {
-                while (connection.Connected && IsDisconnectRequested == false)
+                ["jsonrpc"] = "2.0",
+                ["method"] = method,
+                ["id"] = id
+            };
+            if (@params != null) req["params"] = JObject.FromObject(@params);
+
+            var tcs = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending[id] = tcs;
+
+            string line = JsonConvert.SerializeObject(req);
+            await _writer.WriteLineAsync(line);
+            _logger?.LogTrace("→ {Json}", line);
+
+            using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeoutCts.CancelAfter(Math.Max(1000, timeoutMs));
+
+                using (timeoutCts.Token.Register(() => tcs.TrySetCanceled()))
                 {
-                    // TODO: This should probably wait for a full JSON-RPC formatted message before attempting to parse or trigger the OnResponse event.
-                    buffer = new byte[bufferSize];
-                    var byteCount = connection.Receive(buffer);
-                    if (byteCount <= 0) continue;
-                    string packet = Encoding.UTF8.GetString(buffer);
-                    if (!string.IsNullOrEmpty(packet)) packet = packet.Trim(NULL).Replace(NULL.ToString(), string.Empty);
+                    try { return await tcs.Task.ConfigureAwait(false); }
+                    catch (TaskCanceledException) { _pending.TryRemove(id, out _); throw new TimeoutException($"RPC '{method}' timed out."); }
+                }
+            }
+        }
 
-                    while (!string.IsNullOrEmpty(packet))
+        /// <summary>
+        /// Gracefully closes the TCP connection.
+        /// </summary>
+        public void Close()
+        {
+            try { _pumpCts?.Cancel(); } catch { }
+            try { _reader?.Dispose(); } catch { }
+            try { _writer?.Dispose(); } catch { }
+            try { _net?.Dispose(); } catch { }
+            try { _tcp?.Dispose(); } catch { }
+
+            foreach (var kv in _pending)
+                kv.Value.TrySetCanceled();
+
+            _pending.Clear();
+        }
+
+        /// <summary>
+        /// Disposes the connection and resources.
+        /// </summary>
+        public void Dispose() => Close();
+
+        /// <summary>
+        /// Background receive loop parsing newline-delimited JSON objects.
+        /// Routes responses by id and raises notifications for method-only messages.
+        /// </summary>
+        private async Task ReceivePumpAsync(CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    var line = await _reader.ReadLineAsync();
+                    if (line == null) break; // remote closed
+
+                    _logger?.LogTrace("← {Json}", line);
+
+                    JObject msg = null;
+                    try { msg = JObject.Parse(line); }
+                    catch (Exception ex) { _logger?.LogDebug(ex, "Invalid JSON received"); continue; }
+
+                    // Response with id
+                    if (msg.TryGetValue("id", out var idTok) && idTok.Type == JTokenType.Integer)
                     {
-                        int length = packet.Length;
-                        for (int i = 0; i < length; i++)
-                        {
-                            var c = packet[i];
-                            responseBuilder.Append(c);
-
-                            if (c == STX)
-                                tokenStack++;
-                            if (c == ETX)
-                                tokenStack--;
-
-                            if (tokenStack == 0)
-                            {
-                                string message = responseBuilder.ToString();
-                                if (!string.IsNullOrEmpty(message))
-                                {
-                                    responseBuilder.Clear();
-                                    packet = packet.Substring(i+1);
-                                    if (!receivedMessage(message))
-                                    {
-                                        packet = string.Empty;
-                                    }
-                                    break;
-                                }
-                            }
-
-                            // Break out of While loop
-                            if (i == length - 1)
-                                packet = string.Empty;
-                        }
+                        var id = idTok.Value<int>();
+                        if (_pending.TryRemove(id, out var tcs))
+                            tcs.TrySetResult(msg);
+                        continue;
                     }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to read response from {Address} due to error: {Exception}", Endpoint, ex);
-            }
-        }
 
-        private bool receivedMessage(string message)
-        {
-            if (string.IsNullOrEmpty(message)) return false;
-
-            JObject response = null;
-            try
-            {
-                response = JsonConvert.DeserializeObject<JObject>(message);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to deserialize response into JSON\r\n\tMessage: {Message}\r\n\tException: {Exception}", message, ex);
-                return false;
-            }
-
-            if (response == null)
-                return false;
-
-            if (response.ContainsKey("id"))
-            {
-                int id = response["id"].Value<int>();
-                if (callbacks.ContainsKey(id))
-                {
-                    lock (callbacks)
+                    // Notification (no id)
+                    if (msg.TryGetValue("method", out _))
                     {
-                        callbacks[id] = response;
-                        return true;
+                        OnNotification?.Invoke(msg);
+                        continue;
                     }
-                }
-            } else if (response.ContainsKey("method"))
-            {
-                string method = response["method"].Value<string>();
-            } else
-            {
-                _logger?.LogWarning("Unrecognized RPC response: {Message}", message);
-            }
 
-            OnResponse?.Invoke(response);
-
-            return true;
-        }
-
-        public Task<JObject> SendCommand(RpcRequest request, CancellationToken cancellationToken = default)
-        {
-            if (writer == null) throw new NullReferenceException("RPC Service has not started yet");
-
-            int id = ++requestId;
-            var message = request.ToJsonRpcRequest(id);
-            string json = JsonConvert.SerializeObject(message);
-            writer.WriteLine(json);
-
-            lock(callbacks)
-            {
-                callbacks.Add(id, null);
-            }
-            return Task.Run<JObject>(() =>
-            {
-                while (callbacks.ContainsKey(id) || cancellationToken.IsCancellationRequested)
-                {
-                    if (callbacks.ContainsKey(id))
-                    {
-                        JObject result = callbacks[id];
-                        if (result != null)
-                        {
-                            callbacks.Remove(id);
-                            return result;
-                        }
-                    }
-                }
-                return null;
-            }, cancellationToken);
-        }
-
-        private void disconnectCallback(IAsyncResult result)
-        {
-            try
-            {
-                connection.EndDisconnect(result);
-
-                asyncTaskSwitch.Set();
-                _logger?.LogInformation("Disconnected from {Address}...", Endpoint);
-            }
-            catch (SocketException se)
-            {
-                if (connection.Connected == false)
-                {
-                    asyncTaskSwitch.Set();
-                    _logger?.LogInformation("Disconnected from {Address}...", Endpoint);
-                } else
-                {
-                    _logger?.LogError(se, "Failed to disconnect from {Address}", Endpoint);
-                    throw se;
+                    _logger?.LogDebug("Unrecognized message: {Msg}", msg.ToString(Formatting.None));
                 }
             }
-            catch (Exception ex)
+            catch (IOException) { /* connection dropped */ }
+            catch (ObjectDisposedException) { /* shutting down */ }
+            catch (Exception ex) { _logger?.LogError(ex, "Receive loop failed"); }
+            finally
             {
-                _logger?.LogError(ex, "Failed to disconnect from {Address}", Endpoint);
-                throw ex;
+                // fail any waiting callers
+                foreach (var kv in _pending)
+                    kv.Value.TrySetException(new IOException("Connection closed"));
+                _pending.Clear();
             }
-        }
-
-        public void Stop()
-        {
-            _logger?.LogInformation("Stopping JSON-RPC Listener @{Address}...", Endpoint);
-            IsDisconnectRequested = true;
-            connection.BeginDisconnect(true, new AsyncCallback(disconnectCallback), connection);
-            asyncTaskSwitch.WaitOne();
-            IsDisconnectRequested = false;
-            asyncTaskSwitch.Reset();
-
-            stream.Close();
-            reader.Close();
-            writer.Close();
-        }
-
-        public void Dispose()
-        {
-            Stop();
-            connection?.Dispose();
-            stream?.Dispose();
-            reader?.Dispose();
-            writer?.Dispose();
         }
     }
 }

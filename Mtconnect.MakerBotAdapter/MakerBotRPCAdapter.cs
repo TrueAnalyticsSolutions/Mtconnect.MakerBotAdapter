@@ -88,7 +88,7 @@ namespace Mtconnect.MakerBotAdapter
                 // Attempt to reconnect
                 try
                 {
-                    Machine.Connection.Start();
+                    Machine.Connection.ConnectAsync();
                 }
                 catch (Exception ex)
                 {
@@ -104,7 +104,7 @@ namespace Mtconnect.MakerBotAdapter
                 }
                 _busy = false;
                 return;
-            } else if (!Machine.Connection.IsAuthenticated)
+            } else if (!Machine.Connection.IsConnected)
             {
                 // TODO: Re-Authorize, but may be unnecessary because Authorization/Authentication is handled in the start call
             }
@@ -193,7 +193,7 @@ namespace Mtconnect.MakerBotAdapter
                         {
                             _logger?.LogWarning("Recommended to provide an authCode for the RPC connection");
                         }
-                        Machine.Connection.OnResponse += Connection_OnResponse;
+                        Machine.Connection.OnNotification += Connection_OnResponse;
                         Machine.Config.Serial = match.iserial;
                         Machine.Config.Name = match.machine_name;
                         Machine.SSL = int.Parse(match.ssl_port);
@@ -307,7 +307,7 @@ namespace Mtconnect.MakerBotAdapter
                     default:
                         if (obj.ContainsKey("error"))
                         {
-                            _model.Controller.Path.Alarm.Add(AdapterSdk.DataItems.Condition.Level.FAULT, obj["error"]["message"].ToString(), obj["error"]["code"].ToString(), obj["error"]["data"]["name"].ToString());
+                            _model.Controller.Path.Alarm.AssertFault(obj["error"]["code"].ToString(), obj["error"]["message"].ToString(), obj["error"]["data"]["name"].ToString());
                         } else
                         {
                             _logger?.LogWarning("Unhandled message received: {@Message}", obj);
@@ -353,30 +353,30 @@ namespace Mtconnect.MakerBotAdapter
                         ext.FilamentType.Unavailable();
                     } else if (extruder.filament_presence == true)
                     {
-                        ext.OutOfFilament = EndOfBar.PRIMARY.NO.ToString();
+                        ext.OutOfFilament = EndOfBarValues.NO;
                     } else
                     {
-                        ext.OutOfFilament = EndOfBar.PRIMARY.YES.ToString();
+                        ext.OutOfFilament = EndOfBarValues.YES;
                         ext.FilamentType.Unavailable();
                     }
 
                     switch (extruder.error)
                     {
                         case 54:
-                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, "extruder not present", extruder.error.ToString());
+                            ext.ToolError.AssertFault(extruder.error.ToString(), "extruder not present");
                             break;
                         case 80:
-                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.WARNING, "filament not present", extruder.error.ToString());
+                            ext.ToolError.AssertWarning(extruder.error.ToString(), "filament not present");
                             break;
                         case 81:
-                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, model.current_process?.step ?? "handling_recoverable_filament_jam", extruder.error.ToString());
+                            ext.ToolError.AssertFault(extruder.error.ToString(), model.current_process?.step ?? "handling_recoverable_filament_jam");
                             break;
                         case null:
                         case 0:
-                            ext.ToolError.Normal();
+                            ext.ToolError.SetNormal();
                             break;
                         default:
-                            ext.ToolError.Add(AdapterSdk.DataItems.Condition.Level.FAULT, model.current_process?.step ?? extruder.error.ToString(), extruder.error.ToString());
+                            ext.ToolError.AssertFault(extruder.error.ToString(), model.current_process?.step ?? extruder.error.ToString());
                             _logger?.LogWarning("Unhandled toolheads.extruder[{ExtruderIndex}].error received: {ErrorCode}", extruder.index, extruder.error);
                             break;
                     }
@@ -446,10 +446,10 @@ namespace Mtconnect.MakerBotAdapter
                 switch (error?.code)
                 {
                     case null:
-                        _model.Controller.Path.Alarm?.Normal();
+                        _model.Controller.Path.Alarm?.SetNormal();
                         break;
                     default:
-                        _model.Controller.Path.Alarm.Add(AdapterSdk.DataItems.Condition.Level.FAULT, error.message, error.code);
+                        _model.Controller.Path.Alarm.AssertFault(error.code, error.message);
                         _logger?.LogWarning("Unhandled current_process.error received: {@Error}", error);
                         break;
                 }
@@ -463,7 +463,7 @@ namespace Mtconnect.MakerBotAdapter
                 _model.Controller.Path.Execution = Execution.READY;
                 _model.Controller.Path.Functionality?.Unavailable();
                 _model.Controller.Path.State?.Unavailable();
-                _model.Controller.Path.Alarm?.Normal();
+                _model.Controller.Path.Alarm?.SetNormal();
             }
         }
 
@@ -621,7 +621,7 @@ namespace Mtconnect.MakerBotAdapter
             if (Machine != null)
             {
                 Machine.Stop();
-                Machine.Connection.OnResponse -= Connection_OnResponse;
+                Machine.Connection.OnNotification -= Connection_OnResponse;
             }
 
             OnAdapterSourceStopped?.Invoke(this, new AdapterSourceStoppedEventArgs(ex));

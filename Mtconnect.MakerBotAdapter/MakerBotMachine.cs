@@ -20,10 +20,9 @@ namespace Mtconnect.MakerBotAdapter
 
         public ToolHead GetOrAddExtruder(string name)
         {
-            var ext = GetOrAddAuxiliary<ToolHead>(name);
             if (!Extruders.ContainsKey(name))
-                Extruders.Add(name, ext);
-            return ext;
+                Extruders.Add(name, new ToolHead());
+            return Extruders[name];
         }
 
         public override void Unavailable()
@@ -53,10 +52,10 @@ namespace Mtconnect.MakerBotAdapter
     public class MachineController : MtcTypes.Controller
     {
         [Event("apiv", "Version of the Croissant API")]
-        public Application.VERSION ApiVersion { get; set; }
+        public Application.Version ApiVersion { get; set; }
 
         [Event("firmv", "Version of the firmware")]
-        public Firmware.VERSION FirmwareVersion { get; set; }
+        public Firmware.Version FirmwareVersion { get; set; }
 
         [DataItemPartial("p")]
         public MachinePath Path => GetOrAddPath<MachinePath>(nameof(Path));
@@ -78,25 +77,25 @@ namespace Mtconnect.MakerBotAdapter
         public FunctionalMode Functionality { get; set; }
 
         [Event("prg", "Reference to the internal filename of the .gcode or .makerbot part program currently executing on the machine")]
-        public Program.ACTIVE Program { get; set; }
+        public Program.Active Program { get; set; }
 
         [Condition("alrm")]
         public Condition Alarm { get; set; } = new Condition("Alarm");
 
         [Event("to", "z-offset defined for nozzle(s)")]
-        public ToolOffset.LENGTH ToolOffset { get; set; }
+        public ToolOffset.Length ToolOffset { get; set; }
 
         [Event("un", "User that submitted the print job")]
         public OperatorId Username { get; set; }
 
         [Event("ps", "When a print process started")]
-        public ProcessTime.START PrintStart { get; set; }
+        public ProcessTime.Start PrintStart { get; set; }
 
         [Event("pt", "When a print process is estimated to complete. this is based on the process start time")]
-        public ProcessTime.TARGETCOMPLETION EstimatedCompletion { get; set; }
+        public ProcessTime.TargetCompletion EstimatedCompletion { get; set; }
 
         [Event("pc", "When the print process was completed")]
-        public ProcessTime.COMPLETE PrintCompleted { get; set; }
+        public ProcessTime.Complete PrintCompleted { get; set; }
 
         [Event("state", "Current print process state")]
         public ProcessState State { get; set; }
@@ -120,10 +119,10 @@ namespace Mtconnect.MakerBotAdapter
     public class MachineLinearAxis : MtcTypes.Linear
     {
         [Sample("pos")]
-        public PathPosition.ACTUAL ActualPosition { get; set; }
+        public PathPosition.Actual ActualPosition { get; set; }
 
         [Sample("cmd")]
-        public PathPosition.COMMANDED CommandedPosition { get; set; }
+        public PathPosition.Commanded CommandedPosition { get; set; }
 
         public override void Unavailable()
         {
@@ -133,7 +132,7 @@ namespace Mtconnect.MakerBotAdapter
             CommandedPosition?.Unavailable();
         }
     }
-    public class ToolHead : MtcTypes.Heating
+    public class ToolHead : MtcTypes.ExtrusionUnit
     {
         [Sample("ttemp", "Target temperature for the extruder, in Celsius", Units = "CELSIUS")]
         public Temperature TargetTemperature { get; set; }
@@ -151,7 +150,7 @@ namespace Mtconnect.MakerBotAdapter
         public Condition ToolError { get; set; } = new Condition("ToolError");
 
         [Event("fp", "Whether the filament in this extruder is depleted or missing")]
-        public EndOfBar.PRIMARY OutOfFilament { get; set; }
+        public EndOfBar.Primary OutOfFilament { get; set; }
 
         [Event("mat", "The assumed type of material loaded into the extruder based on the capabilities of the extruder. Returns UNAVAILABLE either when undetermined or when " + nameof(OutOfFilament) + " is 'YES'")]
         public Material FilamentType { get; set; }
@@ -186,7 +185,7 @@ namespace Mtconnect.MakerBotAdapter
         public MachineController Controller { get; set; } = new MachineController();
 
         [Event("ip", "Network IP address used to access the machine's API")]
-        public Network.IPV4ADDRESS IPv4 { get; set; }
+        public Network.IPv4Address IPv4 { get; set; }
 
         [Event("p", "Port number used to access the machine's Croissant API")]
         public NetworkPort Port { get; set; }
