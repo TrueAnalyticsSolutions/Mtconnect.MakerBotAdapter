@@ -1,3 +1,5 @@
+[![validate-mtconnect](https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter/actions/workflows/validate-mtconnect.yml/badge.svg)](https://github.com/TrueAnalyticsSolutions/Mtconnect.MakerBotAdapter/actions/workflows/validate-mtconnect.yml)
+
 MakerBot Agent/Adapter Core serves as a data aggregator with MakerBot 3D Printers from the 4th generation and newer. The library provides wrappers for communicating with the machine asynchronously using its JSON-RPC communication. An MTConnect Adapter will be completed and embedded using this library.
 
 Thanks to gryphius and their [Python API](https://github.com/gryphius/makerbot-gen5-api), it was a great starting place for discovering the JSON-RPC methods and workflow.
