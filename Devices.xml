@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="/styles/styles.xsl"?>
+<MTConnectDevices xmlns:m="urn:mtconnect.org:MTConnectDevices:2.2" xmlns="urn:mtconnect.org:MTConnectDevices:2.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mtconnect.org:MTConnectDevices:2.2 http://schemas.mtconnect.org/schemas/MTConnectDevices_2.2.xsd">
+  <Header creationTime="2023-06-23T05:37:23Z" sender="LightWorks-TM" instanceId="0" version="2.2.0.2" deviceModelChangeTime="2023-06-22T14:23:02.553618Z" assetBufferSize="0" assetCount="0" bufferSize="0"/>
+  <Devices>
+    <Device id="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367" iso841Class="1" name="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367" sampleInterval="50" uuid="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367">
+      <DataItems>
+        <DataItem category="EVENT" id="a" name="a" type="AVAILABILITY">
+          <Definition>
+            <Description>AVAILABLE when a socket connection is established with the machine.</Description>
+          </Definition>
+        </DataItem>
+        <DataItem category="EVENT" id="ip" name="ip" subType="IPV4_ADDRESS" type="NETWORK">
+          <Definition>
+            <Description>Network IP address used to access the machine's API</Description>
+          </Definition>
+        </DataItem>
+        <DataItem category="EVENT" id="p" name="p" type="NETWORK_PORT">
+          <Definition>
+            <Description>Port number used to access the machine's Croissant API</Description>
+          </Definition>
+        </DataItem>
+        <DataItem category="EVENT" discrete="true" id="f892a371-1ce8-3925-bdf7-e34a03138bb0_asset_chg" type="ASSET_CHANGED"/>
+        <DataItem category="EVENT" id="f892a371-1ce8-3925-bdf7-e34a03138bb0_asset_rem" type="ASSET_REMOVED"/>
+        <DataItem category="EVENT" id="f892a371-1ce8-3925-bdf7-e34a03138bb0_asset_count" representation="DATA_SET" type="ASSET_COUNT"/>
+      </DataItems>
+      <Components>
+        <Auxiliaries id="ext" name="Auxiliaries">
+          <Components>
+            <Heating id="mdl" name="ModelExtruder">
+              <DataItems>
+                <DataItem category="SAMPLE" id="extmdlttemp" name="extmdlttemp" nativeUnits="CELSIUS" type="TEMPERATURE" units="CELSIUS">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; Target temperature for the extruder, in Celsius</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="SAMPLE" id="extmdlctemp" name="extmdlctemp" nativeUnits="CELSIUS" type="TEMPERATURE" units="CELSIUS">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; Actual temperature for the extruder, in Celsius</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extmdltid" name="extmdltid" type="TOOL_ASSET_ID">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; MakerBot's internal id for the type of extruder installed in the machine</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extmdltname" name="extmdltname" type="TOOL_ASSET_ID">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; Model number of the recognized extruder id. Returns UNAVAILABLE when the adapter is unable to recognize the ExtruderId.</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="CONDITION" id="extmdlte" name="extmdlte" type="SYSTEM">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder;</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extmdlfp" name="extmdlfp" subType="PRIMARY" type="END_OF_BAR">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; Whether the filament in this extruder is depleted or missing</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extmdlmat" name="extmdlmat" type="MATERIAL">
+                  <Definition>
+                    <Description>Regarding the primary, (typically) model printing extruder; The assumed type of material loaded into the extruder based on the capabilities of the extruder. Returns UNAVAILABLE either when undetermined or when OutOfFilament is 'YES'</Description>
+                  </Definition>
+                </DataItem>
+              </DataItems>
+            </Heating>
+            <Heating id="spt" name="SupportExtruder">
+              <DataItems>
+                <DataItem category="SAMPLE" id="extsptttemp" name="extsptttemp" nativeUnits="CELSIUS" type="TEMPERATURE" units="CELSIUS">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; Target temperature for the extruder, in Celsius</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="SAMPLE" id="extsptctemp" name="extsptctemp" nativeUnits="CELSIUS" type="TEMPERATURE" units="CELSIUS">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; Actual temperature for the extruder, in Celsius</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extspttid" name="extspttid" type="TOOL_ASSET_ID">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; MakerBot's internal id for the type of extruder installed in the machine</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extspttname" name="extspttname" type="TOOL_ASSET_ID">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; Model number of the recognized extruder id. Returns UNAVAILABLE when the adapter is unable to recognize the ExtruderId.</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="CONDITION" id="extsptte" name="extsptte" type="SYSTEM">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder;</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extsptfp" name="extsptfp" subType="PRIMARY" type="END_OF_BAR">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; Whether the filament in this extruder is depleted or missing</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="extsptmat" name="extsptmat" type="MATERIAL">
+                  <Definition>
+                    <Description>Regarding the secondary, (typically) support printing extruder; The assumed type of material loaded into the extruder based on the capabilities of the extruder. Returns UNAVAILABLE either when undetermined or when OutOfFilament is 'YES'</Description>
+                  </Definition>
+                </DataItem>
+              </DataItems>
+            </Heating>
+          </Components>
+        </Auxiliaries>
+        <Axes id="ax" name="Axes">
+          <Components>
+            <Linear id="x" name="X">
+              <DataItems>
+                <DataItem category="SAMPLE" id="axxpos" name="axxpos" subType="ACTUAL" type="PATH_POSITION" units="MILLIMETER_3D"/>
+                <DataItem category="SAMPLE" id="axxcmd" name="axxcmd" subType="COMMANDED" type="PATH_POSITION" units="MILLIMETER_3D"/>
+              </DataItems>
+            </Linear>
+            <Linear id="y" name="Y">
+              <DataItems>
+                <DataItem category="SAMPLE" id="axypos" name="axypos" subType="ACTUAL" type="PATH_POSITION" units="MILLIMETER_3D"/>
+                <DataItem category="SAMPLE" id="axycmd" name="axycmd" subType="COMMANDED" type="PATH_POSITION" units="MILLIMETER_3D"/>
+              </DataItems>
+            </Linear>
+            <Linear id="z" name="Z">
+              <DataItems>
+                <DataItem category="SAMPLE" id="axzpos" name="axzpos" subType="ACTUAL" type="PATH_POSITION" units="MILLIMETER_3D"/>
+                <DataItem category="SAMPLE" id="axzcmd" name="axzcmd" subType="COMMANDED" type="PATH_POSITION" units="MILLIMETER_3D"/>
+              </DataItems>
+            </Linear>
+          </Components>
+        </Axes>
+        <Controller id="ctrl" name="Controller">
+          <DataItems>
+            <DataItem category="EVENT" id="ctrlapiv" name="ctrlapiv" subType="VERSION" type="APPLICATION">
+              <Definition>
+                <Description>Version of the Croissant API</Description>
+              </Definition>
+            </DataItem>
+            <DataItem category="EVENT" id="ctrlfirmv" name="ctrlfirmv" subType="VERSION" type="FIRMWARE">
+              <Definition>
+                <Description>Version of the firmware</Description>
+              </Definition>
+            </DataItem>
+          </DataItems>
+          <Components>
+            <Path id="p" name="Path">
+              <DataItems>
+                <DataItem category="EVENT" id="ctrlpexe" name="ctrlpexe" type="EXECUTION">
+                  <Definition>
+                    <Description>Current execution state of the program on the machine</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlpfm" name="ctrlpfm" type="FUNCTIONAL_MODE">
+                  <Definition>
+                    <Description>Indicates whether the machine is in PRODUCTION, SETUP, or TEARDOWN depending on the current process state</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlpprg" name="ctrlpprg" subType="ACTIVE" type="PROGRAM">
+                  <Definition>
+                    <Description>Reference to the internal filename of the .gcode or .makerbot part program currently executing on the machine</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="CONDITION" id="ctrlpalrm" name="ctrlpalrm" type="x:ctrlpalrm"/>
+                <DataItem category="EVENT" id="ctrlpto" name="ctrlpto" subType="LENGTH" type="TOOL_OFFSET">
+                  <Definition>
+                    <Description>z-offset defined for nozzle(s)</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlpun" name="ctrlpun" type="OPERATOR_ID">
+                  <Definition>
+                    <Description>User that submitted the print job</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlpps" name="ctrlpps" subType="START" type="PROCESS_TIME">
+                  <Definition>
+                    <Description>When a print process started</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlppt" name="ctrlppt" subType="TARGET_COMPLETION" type="PROCESS_TIME">
+                  <Definition>
+                    <Description>When a print process is estimated to complete. this is based on the process start time</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlppc" name="ctrlppc" subType="COMPLETE" type="PROCESS_TIME">
+                  <Definition>
+                    <Description>When the print process was completed</Description>
+                  </Definition>
+                </DataItem>
+                <DataItem category="EVENT" id="ctrlpstate" name="ctrlpstate" type="PROCESS_STATE">
+                  <Definition>
+                    <Description>Current print process state</Description>
+                  </Definition>
+                </DataItem>
+              </DataItems>
+            </Path>
+          </Components>
+        </Controller>
+      </Components>
+    </Device>
+  </Devices>
+</MTConnectDevices>
