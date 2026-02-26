@@ -14,7 +14,8 @@ jobs:
 
       - name: Validate MTConnect files
         id: mtc
-        uses: TrueAnalyticsSolutions/mtconnect-validator-action@v1
+        continue-on-error: true
+        uses: TrueAnalyticsSolutions/validator-mtconnect-action@v2
         with:
           api-endpoint: https://validator.tams.ai/api/validation/validate
           api-key: ${{ secrets.MTC_VALIDATOR_API_KEY }}
@@ -24,5 +25,19 @@ jobs:
         run: |
           echo "validated: ${{ steps.mtc.outputs.validated-count }}"
           echo "failed: ${{ steps.mtc.outputs.failed-count }}"
+          echo "non-compliant: ${{ steps.mtc.outputs.non-compliant-count }}"
+          echo "compliant: ${{ steps.mtc.outputs.compliant-count }}"
           echo "success: ${{ steps.mtc.outputs.success }}"
           echo '${{ steps.mtc.outputs.results-json }}'
+
+      - name: Fail workflow when any document is non-compliant
+        env:
+          RESULTS_JSON: ${{ steps.mtc.outputs.results-json }}
+        run: |
+          failed_uploads=$(echo "$RESULTS_JSON" | jq '[.[] | select(.ok != true)] | length')
+          non_compliant=$(echo "$RESULTS_JSON" | jq '[.[] | select(.ok == true and .compliant != true)] | length')
+
+          if [ "$failed_uploads" -gt 0 ] || [ "$non_compliant" -gt 0 ]; then
+            echo "Validation failed ($failed_uploads upload/API failure(s), $non_compliant non-compliant file(s))."
+            exit 1
+          fi
