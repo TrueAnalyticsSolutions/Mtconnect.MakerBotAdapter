@@ -18,7 +18,7 @@ jobs:
         with:
           api-endpoint: https://validator.tams.ai/api/validation/validate
           api-key: ${{ secrets.MTC_VALIDATOR_API_KEY }}
-          file-regex: '(^|/)Devices\\.xml$'
+          files: 'Devices.xml'
 
       - name: Print results
         run: |
