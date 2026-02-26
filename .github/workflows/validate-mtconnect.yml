@@ -1,0 +1,28 @@
+name: validate-mtconnect
+
+on:
+  pull_request:
+  push:
+    branches: [ master ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate MTConnect files
+        id: mtc
+        uses: TrueAnalyticsSolutions/mtconnect-validator-action@v1
+        with:
+          api-endpoint: https://validator.tams.ai/api/validation/validate
+          api-key: ${{ secrets.MTC_VALIDATOR_API_KEY }}
+          file-regex: '(^|/)Devices\\.xml$'
+
+      - name: Print results
+        run: |
+          echo "validated: ${{ steps.mtc.outputs.validated-count }}"
+          echo "failed: ${{ steps.mtc.outputs.failed-count }}"
+          echo "success: ${{ steps.mtc.outputs.success }}"
+          echo '${{ steps.mtc.outputs.results-json }}'
