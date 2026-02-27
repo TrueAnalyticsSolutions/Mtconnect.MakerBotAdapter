@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="/styles/styles.xsl"?>
 <MTConnectDevices xmlns:m="urn:mtconnect.org:MTConnectDevices:2.2" xmlns="urn:mtconnect.org:MTConnectDevices:2.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mtconnect.org:MTConnectDevices:2.2 http://schemas.mtconnect.org/schemas/MTConnectDevices_2.2.xsd">
-  <Header creationTime="2023-06-23T05:37:23Z" sender="LightWorks-TM" instanceId="0" version="2.2.0.2" deviceModelChangeTime="2023-06-22T14:23:02.553618Z" assetBufferSize="0" assetCount="0" bufferSize="0"/>
+  <Header creationTime="2023-06-23T05:37:23Z" sender="LightWorks-TM" instanceId="1" version="2.2.0.2" deviceModelChangeTime="2023-06-22T14:23:02.553618Z" assetBufferSize="0" assetCount="0" bufferSize="0"/>
   <Devices>
     <Device id="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367" iso841Class="1" name="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367" sampleInterval="50" uuid="5a0b3e57-aa1a-4c46-92c7-98b7a3a01367">
       <DataItems>
         <DataItem category="EVENT" id="a" name="a" type="AVAILABILITY">
           <Definition>
             <Description>AVAILABLE when a socket connection is established with the machine.</Description>
-          </Definition>
-        </DataItem>
-        <DataItem category="EVENT" id="ip" name="ip" subType="IPV4_ADDRESS" type="NETWORK">
-          <Definition>
-            <Description>Network IP address used to access the machine's API</Description>
           </Definition>
         </DataItem>
         <DataItem category="EVENT" id="p" name="p" type="NETWORK_PORT">
@@ -25,7 +20,7 @@
         <DataItem category="EVENT" id="f892a371-1ce8-3925-bdf7-e34a03138bb0_asset_count" representation="DATA_SET" type="ASSET_COUNT"/>
       </DataItems>
       <Components>
-        <Auxiliaries id="ext" name="Auxiliaries">
+        <System id="sys" name="Systems">
           <Components>
             <Heating id="mdl" name="ModelExtruder">
               <DataItems>
@@ -106,7 +101,7 @@
               </DataItems>
             </Heating>
           </Components>
-        </Auxiliaries>
+        </System>
         <Axes id="ax" name="Axes">
           <Components>
             <Linear id="x" name="X">
@@ -160,7 +155,7 @@
                     <Description>Reference to the internal filename of the .gcode or .makerbot part program currently executing on the machine</Description>
                   </Definition>
                 </DataItem>
-                <DataItem category="CONDITION" id="ctrlpalrm" name="ctrlpalrm" type="x:ctrlpalrm"/>
+                <DataItem category="CONDITION" id="ctrlpalrm" name="ctrlpalrm" type="SYSTEM"/>
                 <DataItem category="EVENT" id="ctrlpto" name="ctrlpto" subType="LENGTH" type="TOOL_OFFSET">
                   <Definition>
                     <Description>z-offset defined for nozzle(s)</Description>
