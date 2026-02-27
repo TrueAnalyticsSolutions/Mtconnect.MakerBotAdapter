@@ -24,7 +24,7 @@
           <Components>
             <Heating id="mdl" name="ModelExtruder">
               <DataItems>
-                <DataItem category="SAMPLE" id="extmdlttemp" name="extmdlttemp" nativeUnits="CELSIUS" type="FOOBAR" units="CELSIUS">
+                <DataItem category="SAMPLE" id="extmdlttemp" name="extmdlttemp" nativeUnits="CELSIUS" type="TEMPERATURE" units="CELSIUS">
                   <Definition>
                     <Description>Regarding the primary, (typically) model printing extruder; Target temperature for the extruder, in Celsius</Description>
                   </Definition>
