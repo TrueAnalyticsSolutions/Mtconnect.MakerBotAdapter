@@ -35,6 +35,9 @@ namespace MakerBot.Rpc
         public static async Task<JObject> ClearAuthorize(this RpcConnection connection, string username)
             => await connection.request("deauthorize", new { username = username });
 
+        public static async Task<JObject> Deauthorize(this RpcConnection connection, string username)
+            => await connection.request("deauthorize", new { username = username });
+
         public static async Task<JObject> GetAuthorized(this RpcConnection connection)
             => await connection.request("get_authorized");
 
@@ -521,9 +524,9 @@ namespace MakerBot.Rpc
         public static async Task<Config> GetConfig(this RpcConnection connection)
         	=> (await connection.request("get_config", null)).ToObject<Config>();
 
-        public static async Task<JObject> GetSystemInformation(this RpcConnection connection)
+        public static async Task<JObject> GetSystemInformation(this RpcConnection connection, CancellationToken cancellationToken = default)
         {
-            var obj = await connection.request("get_system_information", null);
+            var obj = await connection.request("get_system_information", null, cancellationToken);
             JsonSerializer _writer = new JsonSerializer()
             {
                 NullValueHandling = NullValueHandling.Include
@@ -531,12 +534,12 @@ namespace MakerBot.Rpc
             return obj;
         }
 
-        public static async Task<Handshake> Handshake(this RpcConnection connection, string username = null, string hostVersion = null)
+        public static async Task<Handshake> Handshake(this RpcConnection connection, string username = null, string hostVersion = null, CancellationToken cancellationToken = default)
         	=> (await connection.request("handshake", new
             {
                 username = username,
                 host_version = hostVersion
-            })).ToObject<Handshake>();
+            }, cancellationToken)).ToObject<Handshake>();
             
         public static async Task<NetworkState> NetworkState(this RpcConnection connection)
         	=> (await connection.request("network_state", null)).ToObject<NetworkState>();

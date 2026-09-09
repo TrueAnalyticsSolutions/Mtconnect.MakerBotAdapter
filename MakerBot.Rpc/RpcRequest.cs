@@ -8,7 +8,7 @@ namespace MakerBot
 
         public object Parameters { get; set; }
 
-        public RpcRequest(string method, object parameters)
+        public RpcRequest(string method, object parameters = null)
         {
             Method = method;
             Parameters = parameters;

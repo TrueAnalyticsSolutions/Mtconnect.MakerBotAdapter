@@ -17,6 +17,7 @@
             public int ssl_port;
             public string motor_driver_version;
             public string bot_type;
+            public Firmware_Version firmware_version;
         }
     }
 }

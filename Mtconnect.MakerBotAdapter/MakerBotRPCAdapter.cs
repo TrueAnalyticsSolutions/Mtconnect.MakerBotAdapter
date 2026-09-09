@@ -1,259 +1,390 @@
-﻿using MakerBot;
+using MakerBot;
 using MakerBot.Rpc;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using Mtconnect.AdapterSdk;
+using Mtconnect.AdapterSdk.DataItemValues;
+using Newtonsoft.Json.Linq;
 using System;
+using System.Globalization;
+using System.IO;
 using System.Linq;
-using System.Net;
-using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Mtconnect.MakerBotAdapter
 {
-    public class MakerBotRPCAdapter : IAdapterSource, IDisposable
+    public sealed class MakerBotRPCAdapter : IAdapterSource, IDisposable
     {
-        private ILoggerFactory _loggerFactory;
-        private ILogger _logger { get; set; }
-        
+        private readonly IAdapterLogger _logger;
+        private readonly AdapterConfiguration _config;
+        private readonly SemaphoreSlim _cycleLock = new SemaphoreSlim(1, 1);
+        private readonly System.Timers.Timer _timer;
+        private CancellationTokenSource _lifetime;
+        private DateTime _nextReconnectUtc;
+        private bool _disposed;
+        private bool _started;
+        private bool _stopped;
+        private MakerBotMachine _model = new MakerBotMachine();
+        private readonly ConditionState _alarmState = new ConditionState();
+        private readonly ConditionState[] _toolErrorStates = { new ConditionState(), new ConditionState() };
+
         public event DataReceivedHandler OnDataReceived;
         public event AdapterSourceStartedHandler OnAdapterSourceStarted;
         public event AdapterSourceStoppedHandler OnAdapterSourceStopped;
 
-        private bool _busy { get; set; }
+        public Machine Machine { get; private set; }
+        public string DeviceUuid => CreateUuid(_config.Machine.SerialNumber);
+        public string DeviceName => _config.Machine.Name;
+        public string StationId => _config.Machine.SerialNumber;
+        public string SerialNumber => _config.Machine.SerialNumber;
+        public string Manufacturer => "MakerBot";
+        internal MakerBotMachine CurrentModel => _model;
 
-        private System.Timers.Timer _timer { get; set; } = new System.Timers.Timer();
-
-        public MakerBot.Machine Machine { get; set; } = null;
-
-        private string _serialNumber { get; set; }
-        private string _authCode { get; set; }
-        private MakerBotMachine _model { get; set; } = new MakerBotMachine();
-
-        public MakerBotRPCAdapter(string serialNumber, string authCode = null, double pollRate = 5_000, ILoggerFactory loggerFactory = default)
+        public MakerBotRPCAdapter(string configPath, IAdapterLogger logger = null)
         {
-            if (pollRate <= 0) throw new IndexOutOfRangeException("Poll rate cannot be less than or equal to zero");
-            _loggerFactory = loggerFactory;
-            _logger = loggerFactory?.CreateLogger<MakerBotRPCAdapter>();
-
-            _serialNumber = serialNumber;
-            _authCode = authCode;
-
-            _timer.Interval = pollRate;
-            _timer.Elapsed += _timer_Elapsed;
-        }
-
-        private void _timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
-        {
-            if (_busy) return;
-            _busy = true;
-            if (!Machine.Connection.IsConnected)
-            {
-                _logger?.LogWarning("Machine has disconnected");
-                _model.Availability = "UNAVAILABLE";
-            } else if (!Machine.Connection.IsAuthenticated)
-            {
-            }
-
-            _model.ToolOffset = Machine.Connection.GetZAdjustedOffset().Result;
-
-            _busy = false;
-
-            OnDataReceived?.Invoke(_model, new DataReceivedEventArgs());
+            _logger = logger;
+            _config = LoadConfiguration(configPath);
+            _timer = new System.Timers.Timer(_config.PollIntervalMilliseconds) { AutoReset = true };
+            _timer.Elapsed += async (sender, args) => await PollAsync().ConfigureAwait(false);
         }
 
         public void Start(CancellationToken token = default)
         {
-
-            using (var machineFactory = new MachineFactory())
+            ThrowIfDisposed();
+            if (_started && !_stopped) return;
+            _lifetime?.Dispose();
+            _lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+            _stopped = false;
+            SetUnavailable();
+            try
             {
-                var discoveries = machineFactory.Discover();
-                if (discoveries != null)
-                {
-                    var match = discoveries.FirstOrDefault(o => o.iserial == _serialNumber);
-                    if (match != null)
-                    {
-                        Machine = new MakerBot.Machine(IPAddress.Parse(match.ip), int.Parse(match.port), _loggerFactory);
-                        Machine.Config.Address = match.ip;
-                        Machine.Config.Port = int.Parse(match.port);
-
-                        if (!string.IsNullOrEmpty(_authCode))
-                        {
-                            _logger?.LogInformation("Using Authorization Code: {AuthCode}", _authCode);
-                            Machine.Config.AuthenticationCode = _authCode;
-                        }
-                        else
-                        {
-                            _logger?.LogWarning("Recommended to provide an authCode for the RPC connection");
-                        }
-                        Machine.Connection.OnResponse += Connection_OnResponse;
-                        Machine.Config.Serial = match.iserial;
-                        Machine.Config.Name = match.machine_name;
-                        Machine.SSL = int.Parse(match.ssl_port);
-                        Machine.VID = match.vid.ToString();
-                        Machine.ApiVersion = match.api_version;
-                        Machine.MotorDriveVersion = match.motor_driver_version;
-                        Machine.BotType = match.bot_type;
-                        Machine.FirmwareVersion = match.firmware_version.ToString();
-                        Machine.MachineType = match.machine_type;
-                        Machine.PID = match.pid;
-
-                        _model.Port = int.Parse(match.port);
-                        _model.IPv4 = match.ip;
-                        _logger?.LogDebug("Found machine through network discovery");
-                    } else
-                    {
-                        _logger?.LogWarning("Couldn't discover machine in broadcast");
-                    }
-                } else
-                {
-                    _logger?.LogWarning("No machines discovered on the network");
-                }
+                ConnectAsync(_lifetime.Token).GetAwaiter().GetResult();
             }
-            if (Machine == null)
+            catch (UnauthorizedAccessException) { throw; }
+            catch (Exception ex)
             {
-                var missingMachine = new Exception(("Machine was not initialized"));
-                _logger?.LogWarning(missingMachine, missingMachine.Message);
-                Stop();
-                throw missingMachine;
+                _nextReconnectUtc = DateTime.UtcNow.AddMilliseconds(_config.ReconnectIntervalMilliseconds);
+                _logger?.LogWarning(ex, "Initial MakerBot connection failed; the adapter will retry");
             }
-            Machine.Start(token);
-
-            // TODO: Get more machine information to fill in config
-            var sysInfo = Machine.Connection.GetSystemInformation().Result;
-            if (sysInfo != null)
-            {
-                _logger?.LogDebug("Received SystemInformation: ${SysInfo}", JsonConvert.SerializeObject(sysInfo));
-            } else
-            {
-                _logger?.LogDebug("Could not retrieve SystemInformation");
-            }
-
-
             _timer.Start();
-
+            _started = true;
             OnAdapterSourceStarted?.Invoke(this, new AdapterSourceStartedEventArgs());
         }
 
-        private void Connection_OnResponse(Newtonsoft.Json.Linq.JObject obj)
+        private async Task ConnectAsync(CancellationToken cancellationToken)
         {
-            _model.Availability = "AVAILABLE";
-
-            if (obj.ContainsKey("method"))
+            Exception directFailure = null;
+            try
             {
-                string method = obj["method"].ToString();
-                switch (method)
-                {
-                    case "system_notification":
-                        var system_notification = obj.ToObject<SystemNotification>();
-                        if (system_notification?.@params == null)
-                        {
-                            _logger?.LogWarning("Could not parse 'system_notification': ${Result}", JsonConvert.SerializeObject(obj));
-                        }
-
-                        var model = system_notification?.@params?.info;
-                        // Update Tool Info
-                        if (model.toolheads != null)
-                        {
-                            foreach (var extruder in model.toolheads?.extruder)
-                            {
-                                ToolHead ext = null;
-                                if (extruder.index == 0)
-                                {
-                                    ext = _model.Extruder1;
-                                }
-                                else if (extruder.index == 1)
-                                {
-                                    ext = _model.Extruder2;
-                                }
-                                ext.CurrentTemperature = extruder.current_temperature;
-                                ext.TargetTemperature = extruder.target_temperature;
-                                ext.ToolId = extruder.tool_id.ToString();
-                                if (extruder.error == 0)
-                                {
-                                    ext.ToolError.Normal();
-                                }
-                                else
-                                {
-                                    ext.ToolError.Add(AdapterInterface.DataItems.Condition.Level.FAULT, extruder.error.ToString(), extruder.error.ToString());
-                                }
-                            }
-                        }
-
-                        // Update process information
-                        // TODO: Tie-in to current_process
-
-                        _model.IPv4 = model.ip;
-                        _model.Port = Machine.Config.Port;
-
-                        if (model.current_process != null)
-                        {
-                            _model.Program = model.current_process?.name
-                                ?? model.current_process?.filepath
-                                ?? model.current_process?.filename
-                                ?? "UNAVAILABLE";
-
-                            // Process EXECUTION
-                            if (model.current_process?.cancelled == true)
-                            {
-                                _model.Execution = "INTERRUPTED";
-                            }
-                            else if (model.current_process?.complete == true)
-                            {
-                                _model.Execution = "PROGRAM_COMPLETED";
-                            }
-                            else
-                            {
-                                _model.Execution = "ACTIVE";
-                            }
-
-                            // Process SystemAlarm
-                            var error = model.current_process?.error;
-                            if (error != null && !string.IsNullOrEmpty(error.code))
-                            {
-                                _model.Alarm.Add(AdapterInterface.DataItems.Condition.Level.FAULT, error.message, error.code);
-                            }
-                        }
-                        else
-                        {
-                            _model.Program = "UNAVAILABLE";
-                            _model.Execution = "READY";
-                            _model.Alarm.Normal();
-                        }
-                        break;
-                    default:
-                        if (obj.ContainsKey("error"))
-                        {
-                            _model.Alarm.Add(AdapterInterface.DataItems.Condition.Level.FAULT, obj["error"]["message"].ToString(), obj["error"]["code"].ToString(), obj["error"]["data"]["name"].ToString());
-                        } else
-                        {
-                            _logger?.LogWarning("Unhandled message received: ${Message}", JsonConvert.SerializeObject(obj));
-                        }
-                        break;
-                }
-            } else
-            {
-                _logger?.LogWarning("Unrecognized, unsolicited message received: ${Message}", JsonConvert.SerializeObject(obj));
+                await ReplaceMachineAsync(Clone(_config.Machine), cancellationToken).ConfigureAwait(false);
+                return;
             }
-            OnDataReceived?.Invoke(_model, new DataReceivedEventArgs());
+            catch (Exception ex)
+            {
+                directFailure = ex;
+                _logger?.LogWarning(ex, "Configured MakerBot endpoint {0}:{1} was unavailable; discovering serial {2}", _config.Machine.Address, _config.Machine.RpcPort, _config.Machine.SerialNumber);
+            }
+
+            if (directFailure is UnauthorizedAccessException) throw directFailure;
+
+            using (var factory = new MachineFactory())
+            {
+                var discovered = await factory.DiscoverBySerialAsync(_config.Machine.SerialNumber, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (discovered == null) throw new IOException("Could not connect to or rediscover the configured MakerBot.", directFailure);
+                var discoveredConfig = Clone(_config.Machine);
+                discoveredConfig.Address = discovered.ip;
+                discoveredConfig.RpcPort = int.TryParse(discovered.port, out var port) ? port : 9999;
+                await ReplaceMachineAsync(discoveredConfig, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private async Task ReplaceMachineAsync(MakerBot.MachineConfig config, CancellationToken cancellationToken)
+        {
+            var candidate = new Machine(config);
+            try
+            {
+                candidate.Connection.ConnectionChanged += ConnectionChanged;
+                candidate.Connection.OnResponse += ProcessPayload;
+                await candidate.StartAsync(false, cancellationToken).ConfigureAwait(false);
+                Machine?.Dispose();
+                Machine = candidate;
+                _config.Machine.Address = candidate.Config.Address;
+                _config.Machine.RpcPort = candidate.Config.RpcPort;
+                _config.Machine.Name = candidate.Config.Name;
+                SetAvailable();
+            }
+            catch
+            {
+                candidate.Dispose();
+                throw;
+            }
+        }
+
+        private void ConnectionChanged(object sender, EventArgs args)
+        {
+            var connection = sender as RpcConnection;
+            _model.ConnectionStatus = connection?.IsConnected == true
+                ? ConnectionStatus.ESTABLISHED
+                : ConnectionStatus.CLOSED;
+            Publish();
+        }
+
+        private async Task PollAsync()
+        {
+            if (_lifetime == null || _lifetime.IsCancellationRequested || !await _cycleLock.WaitAsync(0).ConfigureAwait(false)) return;
+            try
+            {
+                if (Machine?.Connection?.IsConnected != true || Machine.Connection.IsAuthenticated != true)
+                {
+                    SetUnavailable();
+                    if (DateTime.UtcNow >= _nextReconnectUtc)
+                    {
+                        _nextReconnectUtc = DateTime.UtcNow.AddMilliseconds(_config.ReconnectIntervalMilliseconds);
+                        try { await ConnectAsync(_lifetime.Token).ConfigureAwait(false); }
+                        catch (Exception ex) { _logger?.LogWarning(ex, "MakerBot reconnect failed"); }
+                    }
+                    return;
+                }
+
+                var response = await Machine.Connection.GetSystemInformation(_lifetime.Token).ConfigureAwait(false);
+                ProcessPayload(response);
+                try { ProcessToolOffset((float)await Machine.Connection.GetZAdjustedOffset().ConfigureAwait(false)); }
+                catch (Exception ex) { _logger?.LogDebug("Tool offset request failed: {0}", ex.Message); }
+                Publish();
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "MakerBot polling failed");
+                SetUnavailable();
+            }
+            finally { _cycleLock.Release(); }
+        }
+
+        internal void ProcessPayload(JObject payload)
+        {
+            if (payload == null) return;
+            if (payload["error"] != null)
+            {
+                SetAlarmFault(payload["error"], "RPC_ERROR", "MakerBot RPC error");
+                Publish();
+                return;
+            }
+
+            var info = payload["result"] ?? payload["params"]?["info"];
+            if (!(info is JObject infoObject)) return;
+            if (infoObject["toolheads"] == null && infoObject["current_process"] == null &&
+                infoObject["ip"] == null && infoObject["machine_name"] == null) return;
+            info = infoObject;
+            _model.ConnectionStatus = "ESTABLISHED";
+            _model.Availability = "AVAILABLE";
+            _model.IPv4 = info.Value<string>("ip") ?? Machine?.Config.Address;
+            _model.Port = Machine?.Config.RpcPort ?? 0;
+            var extruders = info["toolheads"]?["extruder"] as JArray;
+            if (extruders != null)
+            {
+                foreach (var extruder in extruders)
+                {
+                    var index = extruder.Value<int?>("index") ?? 0;
+                    var target = index == 0 ? _model.Extruder1 : _model.Extruder2;
+                    target.CurrentTemperature = extruder.Value<int?>("current_temperature");
+                    target.TargetTemperature = extruder.Value<int?>("target_temperature");
+                    var toolId = extruder.Value<int?>("tool_id");
+                    target.ToolNumber = toolId?.ToString(CultureInfo.InvariantCulture) ?? AdapterSdk.Constants.UNAVAILABLE;
+                    if (toolId.HasValue && MakerBotCatalog.TryGetTool(toolId.Value, out var tool))
+                    {
+                        target.ToolType = tool.Type;
+                        target.ToolName = tool.Name;
+                        target.ToolMaterial = tool.DefaultMaterialName;
+                    }
+                    else
+                    {
+                        target.ToolType = AdapterSdk.Constants.UNAVAILABLE;
+                        target.ToolName = AdapterSdk.Constants.UNAVAILABLE;
+                        target.ToolMaterial = AdapterSdk.Constants.UNAVAILABLE;
+                    }
+
+                    var toolError = extruder.Value<int?>("error") ?? 0;
+                    if (toolError == 0)
+                    {
+                        SetConditionNormal(target.ToolError, _toolErrorStates[index == 0 ? 0 : 1]);
+                    } else
+                    {
+                        var nativeCode = toolError.ToString(CultureInfo.InvariantCulture);
+                        SetConditionFault(
+                            target.ToolError,
+                            _toolErrorStates[index == 0 ? 0 : 1],
+                            nativeCode,
+                            MakerBotCatalog.GetToolheadErrorName(toolError) ?? $"Unknown MakerBot toolhead error {nativeCode}");
+                    }
+                }
+            }
+            var process = info["current_process"];
+            if (process == null || process.Type == JTokenType.Null)
+            {
+                _model.Program = "UNAVAILABLE";
+                _model.Execution = "READY";
+                _model.ProcessOccurrenceId = AdapterSdk.Constants.UNAVAILABLE;
+                _model.ProcessTimer = new AdapterSdk.DataItemValues.ProcessTimer.Process(AdapterSdk.Constants.UNAVAILABLE);
+                SetConditionNormal(_model.Alarm, _alarmState);
+            }
+            else
+            {
+                _model.Program = process.Value<string>("name") ?? process.Value<string>("filepath") ?? process.Value<string>("filename") ?? "UNAVAILABLE";
+                _model.Execution = process.Value<bool?>("cancelled") == true ? "INTERRUPTED" : process.Value<bool?>("complete") == true ? "PROGRAM_COMPLETED" : "ACTIVE";
+                _model.ProcessOccurrenceId = process["id"]?.ToString();
+                // MakerBot reports elapsed_time in seconds. MakerBot Print divides this value by 60 when displaying minutes.
+                _model.ProcessTimer = new AdapterSdk.DataItemValues.ProcessTimer.Process(process.Value<float?>("elapsed_time"));
+                var processError = process["error"];
+                if (processError == null || processError.Type == JTokenType.Null)
+                {
+                    SetConditionNormal(_model.Alarm, _alarmState);
+                } else
+                {
+                    SetAlarmFault(processError, "PROCESS_ERROR", "MakerBot process error");
+                }
+            }
+            Publish();
+        }
+
+        // MakerBot Print presents GetZAdjustedOffset in millimeters (normally -0.8 mm through +0.8 mm).
+        internal void ProcessToolOffset(float? offset) => _model.ToolOffset = new AdapterSdk.DataItemValues.ToolOffset.Length(offset);
+
+        private void SetAlarmFault(JToken error, string fallbackCode, string fallbackMessage)
+        {
+            var nativeCode = error?["code"]?.ToString();
+            if (string.IsNullOrWhiteSpace(nativeCode)) nativeCode = error?["error_id"]?.ToString();
+            if (string.IsNullOrWhiteSpace(nativeCode)) nativeCode = fallbackCode;
+
+            var catalogName = int.TryParse(nativeCode, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericCode)
+                ? MakerBotCatalog.GetMachineErrorName(numericCode)
+                : null;
+            var nativeMessage = error?["message"]?.ToString();
+            var message = !string.IsNullOrWhiteSpace(catalogName) && !string.IsNullOrWhiteSpace(nativeMessage)
+                ? $"{catalogName}: {nativeMessage}"
+                : catalogName ?? nativeMessage ?? fallbackMessage;
+
+            SetConditionFault(_model.Alarm, _alarmState, nativeCode, message);
+        }
+
+        private static void SetConditionNormal(AdapterSdk.DataItems.Condition condition, ConditionState state)
+        {
+            if (!state.HasObservation)
+            {
+                condition.SetNormal();
+                state.SetNormal();
+                return;
+            }
+
+            if (state.NativeCode == null) return;
+
+            condition[state.NativeCode].Normal();
+            state.SetNormal();
+        }
+
+        private static void SetConditionFault(
+            AdapterSdk.DataItems.Condition condition,
+            ConditionState state,
+            string nativeCode,
+            string message)
+        {
+            if (state.HasObservation &&
+                string.Equals(state.NativeCode, nativeCode, StringComparison.Ordinal) &&
+                string.Equals(state.Message, message, StringComparison.Ordinal)) return;
+
+            if (state.NativeCode != null && !string.Equals(state.NativeCode, nativeCode, StringComparison.Ordinal))
+            {
+                condition[state.NativeCode].Normal();
+            }
+
+            condition[nativeCode].Fault(message);
+            state.SetFault(nativeCode, message);
+        }
+
+        private void SetAvailable()
+        {
+            _model.ConnectionStatus = ConnectionStatus.ESTABLISHED;
+            _model.Availability = Availability.AVAILABLE;
+            _model.IPv4 = Machine.Config.Address;
+            _model.Port = Machine.Config.RpcPort;
+            Publish();
+        }
+
+        internal void SetUnavailable()
+        {
+            if (_model.Availability?.Value?.ToString() == "UNAVAILABLE" && _model.ConnectionStatus?.Value?.ToString() == "CLOSED") return;
+            _model.ConnectionStatus = ConnectionStatus.CLOSED;
+            _model.Availability = Availability.UNAVAILABLE;
+            Publish();
+        }
+
+        private void Publish() => OnDataReceived?.Invoke(this, new DataReceivedEventArgs(_model));
+
+        private sealed class ConditionState
+        {
+            public bool HasObservation { get; private set; }
+            public string NativeCode { get; private set; }
+            public string Message { get; private set; }
+
+            public void SetNormal()
+            {
+                HasObservation = true;
+                NativeCode = null;
+                Message = null;
+            }
+
+            public void SetFault(string nativeCode, string message)
+            {
+                HasObservation = true;
+                NativeCode = nativeCode;
+                Message = message;
+            }
         }
 
         public void Stop(Exception ex = null)
         {
+            if (!_started || _stopped) return;
+            _stopped = true;
             _timer.Stop();
-
-            if (Machine != null)
-            {
-                Machine.Stop();
-                Machine.Connection.OnResponse -= Connection_OnResponse;
-            }
-
+            _lifetime?.Cancel();
+            Machine?.Stop();
             OnAdapterSourceStopped?.Invoke(this, new AdapterSourceStoppedEventArgs(ex));
         }
 
-        public void Dispose()
+        public AdapterSourceDescriptor GetSourceDescriptor() => AdapterDescriptorFactory.CreateSourceDescriptor(this, new[] { typeof(MakerBotMachine) });
+
+        private static AdapterConfiguration LoadConfiguration(string configPath)
         {
-            _timer?.Dispose();
-            Machine?.Dispose();
+            if (string.IsNullOrWhiteSpace(configPath)) throw new ArgumentException("A path to adapterconfig.json is required.", nameof(configPath));
+            var fullPath = Path.GetFullPath(configPath);
+            if (!File.Exists(fullPath)) throw new FileNotFoundException("MakerBot adapter configuration was not found.", fullPath);
+            AdapterConfiguration config;
+            try
+            {
+                config = JsonSerializer.Deserialize<AdapterConfiguration>(File.ReadAllText(fullPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true, AllowTrailingCommas = true, ReadCommentHandling = JsonCommentHandling.Skip });
+            }
+            catch (JsonException ex) { throw new InvalidDataException("MakerBot adapter configuration is not valid JSON.", ex); }
+            if (config?.Machine == null) throw new InvalidDataException("Configuration property 'machine' is required.");
+            if (string.IsNullOrWhiteSpace(config.Machine.Name)) throw new InvalidDataException("Configuration property 'machine.name' is required.");
+            if (string.IsNullOrWhiteSpace(config.Machine.SerialNumber)) throw new InvalidDataException("Configuration property 'machine.serialNumber' is required.");
+            if (string.IsNullOrWhiteSpace(config.Machine.Address)) throw new InvalidDataException("Configuration property 'machine.address' is required.");
+            if (config.Machine.RpcPort < 1 || config.Machine.RpcPort > 65535) throw new InvalidDataException("machine.rpcPort must be between 1 and 65535.");
+            if (config.Machine.SslPort < 1 || config.Machine.SslPort > 65535) throw new InvalidDataException("machine.sslPort must be between 1 and 65535.");
+            if (string.IsNullOrWhiteSpace(config.Machine.AuthenticationCode)) throw new MakerBotPairingRequiredException("Configuration property 'machine.authenticationCode' is missing. Run MakerBot.Configurator.");
+            if (config.PollIntervalMilliseconds < 200) throw new InvalidDataException("pollIntervalMilliseconds must be at least 200.");
+            if (config.ReconnectIntervalMilliseconds < 1000) throw new InvalidDataException("reconnectIntervalMilliseconds must be at least 1000.");
+            return config;
         }
+
+        private static MakerBot.MachineConfig Clone(MakerBot.MachineConfig value) => new MakerBot.MachineConfig { Name = value.Name, SerialNumber = value.SerialNumber, Address = value.Address, RpcPort = value.RpcPort, SslPort = value.SslPort, AuthenticationCode = value.AuthenticationCode, ClientId = value.ClientId, ClientSecret = value.ClientSecret };
+        private static string CreateUuid(string serial)
+        {
+            using (var md5 = MD5.Create()) return new Guid(md5.ComputeHash(Encoding.UTF8.GetBytes("MakerBot:" + serial))).ToString();
+        }
+        private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(MakerBotRPCAdapter)); }
+        public void Dispose() { if (_disposed) return; Stop(); Machine?.Dispose(); _timer.Dispose(); _cycleLock.Dispose(); _lifetime?.Dispose(); _disposed = true; }
     }
+
 }

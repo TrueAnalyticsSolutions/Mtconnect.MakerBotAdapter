@@ -1,7 +1,7 @@
-﻿using MakerBot.Rpc;
+using Makaretu.Dns;
+using MakerBot.Rpc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,98 +13,169 @@ using System.Threading.Tasks;
 
 namespace MakerBot
 {
-    public class MachineFactory : IDisposable
+    public sealed class MachineFactory : IDisposable
     {
+        public const string MdnsServiceName = "_makerbot-jsonrpc._tcp";
+        private const int TargetPort = 12307;
+        private const int ListenPort = 12308;
+        private const int SourcePort = 12309;
         private readonly ILogger<MachineFactory> _logger;
+        private bool _disposed;
 
-        private Dictionary<string, Machine> _machines { get; set; } = new Dictionary<string, Machine>();
+        public MachineFactory(ILoggerFactory logFactory = null) => _logger = logFactory?.CreateLogger<MachineFactory>();
 
-        private Socket BroadcastChannel { get; set; } = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        private Socket AnswerChannel { get; set; } = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        public Broadcast[] Discover() => DiscoverAsync().GetAwaiter().GetResult();
 
-        const int _targetPort = 12307;
-        const int _listenPort = 12308;
-        const int _sourcePort = 12309;
-
-        public MachineFactory(ILoggerFactory logFactory = default)
+        public async Task<Broadcast[]> DiscoverAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            _logger = logFactory?.CreateLogger<MachineFactory>();
-
-            BroadcastChannel.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
-            BroadcastChannel.Bind(new IPEndPoint(IPAddress.Any, _sourcePort) as EndPoint);
-
-            AnswerChannel.Blocking = false;
-            AnswerChannel.Bind(new IPEndPoint(IPAddress.Any, _listenPort));
+            ThrowIfDisposed();
+            var duration = timeout ?? TimeSpan.FromSeconds(4);
+            var results = new List<Broadcast>();
+            try { results.AddRange(await DiscoverMdnsAsync(duration, cancellationToken).ConfigureAwait(false)); }
+            catch (Exception ex) { _logger?.LogWarning(ex, "MakerBot mDNS discovery failed; trying legacy UDP discovery"); }
+            try { results.AddRange(await DiscoverUdpAsync(duration, cancellationToken).ConfigureAwait(false)); }
+            catch (Exception ex) { _logger?.LogWarning(ex, "MakerBot legacy UDP discovery failed"); }
+            return MergeDiscoveries(results);
         }
 
-        public Broadcast[] Discover()
+        internal static Broadcast[] MergeDiscoveries(IEnumerable<Broadcast> results)
         {
-            var broadcastResponses = new List<Broadcast>();
+            return (results ?? Enumerable.Empty<Broadcast>())
+                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.iserial))
+                .GroupBy(x => x.iserial, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.OrderBy(AddressPreference).First())
+                .ToArray();
+        }
 
-            _logger?.LogInformation("Publishing broadcast command");
-            broadcast();
+        private static int AddressPreference(Broadcast discovery)
+        {
+            if (!IPAddress.TryParse(discovery.ip, out var address)) return 2;
+            return address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1;
+        }
 
-            _logger?.LogInformation("Awaiting broadcast command responses...");
-            int maxAttempts = 5;
-            int idx = 0;
-            byte[] buffer = new byte[1024];
-            EndPoint remoteEndpoint = new IPEndPoint(IPAddress.Any, 0);
-            do
+        public async Task<Broadcast> DiscoverBySerialAsync(string serialNumber, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(serialNumber)) throw new ArgumentException("Serial number is required.", nameof(serialNumber));
+            return (await DiscoverAsync(timeout, cancellationToken).ConfigureAwait(false))
+                .FirstOrDefault(x => string.Equals(x.iserial, serialNumber, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private async Task<Broadcast[]> DiscoverMdnsAsync(TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            var records = new List<ResourceRecord>();
+            var instances = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var mdns = new MulticastService())
+            using (var discovery = new ServiceDiscovery(mdns))
             {
-                System.Threading.Thread.Sleep(1000); // Sleep 1 second
-                try
+                discovery.ServiceInstanceDiscovered += (sender, args) =>
                 {
-                    if (!AnswerChannel.Blocking && AnswerChannel.Available > 0)
+                    lock (instances) instances.Add(args.ServiceInstanceName.ToString());
+                    mdns.SendQuery(args.ServiceInstanceName, type: DnsType.ANY);
+                };
+                mdns.AnswerReceived += (sender, args) =>
+                {
+                    lock (records)
                     {
-                        int length = this.AnswerChannel.ReceiveFrom(buffer, ref remoteEndpoint);
-                        if (length > 0)
-                        {
-                            string resp = Encoding.UTF8.GetString(buffer).Trim((char)0x00);
-                            var objResponse = JsonConvert.DeserializeObject<Broadcast>(resp);
-
-                            _logger?.LogTrace("Discovery response: {Response}", resp);
-                            broadcastResponses.Add(objResponse);
-                        }
+                        records.AddRange(args.Message.Answers);
+                        records.AddRange(args.Message.AdditionalRecords);
                     }
-                }
-                catch (SocketException se)
-                {
-                    _logger?.LogWarning("Encountered SocketException while attempting to discover machines. Retry attempt {Attempt}/{MaxAttempts}", idx+1, maxAttempts);
-                    if (idx == maxAttempts - 1) _logger?.LogError(se, "Failed to discover machines due to SocketException");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to discover machines due to Exception");
-                }
-                idx++;
-            } while (idx < maxAttempts);
-            if (idx >= maxAttempts)
-            {
-                //write("\tTimed Out!", ConsoleColor.Red);
+                };
+                mdns.Start();
+                discovery.QueryServiceInstances(MdnsServiceName);
+                await Task.Delay(timeout, cancellationToken).ConfigureAwait(false);
+                mdns.Stop();
             }
 
-            return broadcastResponses.ToArray();
+            lock (records)
+            {
+                var addresses = records.OfType<AddressRecord>().GroupBy(x => x.Name.ToString(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => x.OrderBy(record => record.Address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1).First().Address, StringComparer.OrdinalIgnoreCase);
+                var text = records.OfType<TXTRecord>().GroupBy(x => x.Name.ToString(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => ParseTxt(x.First().Strings), StringComparer.OrdinalIgnoreCase);
+                var output = new List<Broadcast>();
+                foreach (var service in records.OfType<SRVRecord>())
+                {
+                    if (!addresses.TryGetValue(service.Target.ToString(), out var address)) continue;
+                    text.TryGetValue(service.Name.ToString(), out var properties);
+                    properties = properties ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    output.Add(new Broadcast
+                    {
+                        ip = address.ToString(),
+                        port = service.Port.ToString(),
+                        machine_name = Get(properties, "machine_name"),
+                        machine_type = Get(properties, "machine_type"),
+                        iserial = Get(properties, "iserial"),
+                        api_version = Get(properties, "api_version"),
+                        bot_type = Get(properties, "bot_type"),
+                        firmware_version = ParseFirmware(Get(properties, "firmware_version")),
+                        motor_driver_version = Get(properties, "motor_driver_version"),
+                        ssl_port = Get(properties, "ssl_port") ?? "12309",
+                        vid = ParseInt(Get(properties, "vid")),
+                        pid = ParseInt(Get(properties, "pid"))
+                    });
+                }
+                return output.ToArray();
+            }
         }
 
-        private void broadcast(int timeoutMilliseconds = 30_000)
+        private static Dictionary<string, string> ParseTxt(IEnumerable<string> values)
         {
-            if (timeoutMilliseconds <= 0) throw new ArgumentException(nameof(timeoutMilliseconds), "Timeout must be greater than zero");
-
-            JObject broadcast = new JObject();
-            broadcast["command"] = "broadcast";
-
-            byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(broadcast));
-            var endpoint = new IPEndPoint(IPAddress.Broadcast, _targetPort);
-            _logger?.LogDebug("Broadcasting to endpoint: {Endpoint}", endpoint.ToString());
-            BroadcastChannel.SendTo(payload, endpoint);
-            return;
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var value in values ?? Enumerable.Empty<string>())
+            {
+                var separator = value.IndexOf('=');
+                if (separator > 0) result[value.Substring(0, separator)] = value.Substring(separator + 1);
+            }
+            return result;
         }
 
-        public void Dispose()
+        private static string Get(Dictionary<string, string> values, string key) => values.TryGetValue(key, out var value) ? value : null;
+        private static int ParseInt(string value) => int.TryParse(value, out var parsed) ? parsed : 0;
+        private static Firmware_Version ParseFirmware(string value)
         {
-            _machines.Clear();
-            BroadcastChannel?.Dispose();
-            AnswerChannel?.Dispose();
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var parts = value.Split('.');
+            return new Firmware_Version
+            {
+                major = parts.Length > 0 ? ParseInt(parts[0]) : 0,
+                minor = parts.Length > 1 ? ParseInt(parts[1]) : 0,
+                bugfix = parts.Length > 2 ? ParseInt(parts[2]) : 0,
+                build = parts.Length > 3 ? ParseInt(parts[3]) : 0
+            };
         }
+
+        private async Task<Broadcast[]> DiscoverUdpAsync(TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            var results = new List<Broadcast>();
+            using (var sender = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            using (var receiver = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            {
+                sender.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+                sender.Bind(new IPEndPoint(IPAddress.Any, SourcePort));
+                receiver.Bind(new IPEndPoint(IPAddress.Any, ListenPort));
+                receiver.Blocking = false;
+                var payload = Encoding.UTF8.GetBytes("{\"command\":\"broadcast\"}");
+                sender.SendTo(payload, new IPEndPoint(IPAddress.Broadcast, TargetPort));
+                var deadline = DateTime.UtcNow + timeout;
+                while (DateTime.UtcNow < deadline)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (receiver.Available > 0)
+                    {
+                        var buffer = new byte[4096];
+                        EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
+                        var count = receiver.ReceiveFrom(buffer, ref remote);
+                        var response = Encoding.UTF8.GetString(buffer, 0, count).Trim('\0');
+                        try { results.Add(JsonConvert.DeserializeObject<Broadcast>(response)); }
+                        catch (JsonException ex) { _logger?.LogWarning(ex, "Ignoring malformed UDP discovery response"); }
+                    }
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            return results.ToArray();
+        }
+
+        private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(MachineFactory)); }
+        public void Dispose() => _disposed = true;
     }
 }

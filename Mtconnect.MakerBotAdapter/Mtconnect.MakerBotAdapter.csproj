@@ -6,11 +6,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mtconnect.AdapterInterface" Version="1.0.18" />
+    <PackageReference Include="Mtconnect.AdapterSdk.Source" Version="2.6.13" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MakerBot.Rpc\MakerBot.Rpc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="adapterconfig.example.json" Pack="true" PackagePath="contentFiles\any\any" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>MakerBot.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

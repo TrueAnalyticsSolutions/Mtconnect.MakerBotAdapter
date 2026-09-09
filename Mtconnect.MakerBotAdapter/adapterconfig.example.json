@@ -1,0 +1,14 @@
+{
+  "machine": {
+    "name": "MakerBot+",
+    "serialNumber": "23C1000B3C7059020FBB",
+    "address": "10.0.0.61",
+    "rpcPort": 9999,
+    "sslPort": 12309,
+    "authenticationCode": "",
+    "clientId": "MakerWare",
+    "clientSecret": "MakerBotAgentAdapterCore"
+  },
+  "pollIntervalMilliseconds": 5000,
+  "reconnectIntervalMilliseconds": 10000
+}
